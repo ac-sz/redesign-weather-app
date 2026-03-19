@@ -1,0 +1,2066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Cuaca — Weather App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════
+   § 1  DESIGN TOKENS
+   All colours, radii, shadows, sizes in one place.
+   Change a token here — it propagates everywhere.
+════════════════════════════════════════════════════ */
+:root {
+  /* Palette — normal */
+  --bg:          #C3F8FF;
+  --card-bg:     #ABD9FF;
+  --reminder-bg: #FFF6BF;
+  /* Palette — emergency */
+  --em-bg:       #1D1616;
+  --em-border:   #8E1616;
+  --em-btn:      #D84040;
+  --em-text:     #EEEEEE;
+  /* Text */
+  --text:        #1A1A1A;
+  --text-sec:    #666666;
+  /* Borders */
+  --border:      1px solid #E5E5E5;
+  /* Radii */
+  --r-sm: 4px;  --r-md: 8px;  --r-lg: 16px;  --r-xl: 20px;  --r-full: 999px;
+  /* Shadows */
+  --shadow-card:  0 2px 8px rgba(0,0,0,0.05);
+  --shadow-up:    0 4px 12px rgba(0,0,0,0.10);
+  --shadow-float: 0 4px 16px rgba(0,80,160,0.10), 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-sm:    0 2px 6px rgba(0,80,160,0.07);
+  /* Layout */
+  --nav-h:  64px;
+  --bar-h:  56px;
+  --active: #D84040;
+  --font:   'Inter', sans-serif;
+  /* Cloudie spacing */
+  --section-gap: 24px;
+}
+
+/* ════════════════════════════════════════════════════
+   § 2  RESET
+════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ════════════════════════════════════════════════════
+   § 3  BODY + PHONE SHELL
+════════════════════════════════════════════════════ */
+body {
+  font-family: var(--font);
+  background: #D0D0D0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 24px 0 48px;
+}
+#app {
+  width: 390px;
+  min-height: 844px;
+  background: linear-gradient(180deg, #C3F8FF 0%, #D9F0FF 60%, #E4EDFF 100%);
+  border-radius: 40px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.28);
+  display: flex;
+  flex-direction: column;
+  /* No background transition — CSS cannot interpolate between gradients.
+     State changes are handled by data-state attribute selectors below. */
+}
+/* Each weather state sets its own gradient via data-state attribute.
+   No inline style.background needed — JS sets dataset.state only. */
+#app[data-state="clear"]    { background: linear-gradient(180deg, #EBF4FF 0%, #F0F7FF 55%, #E8F2FF 100%); }
+#app[data-state="overcast"] { background: linear-gradient(180deg, #E8E8EC 0%, #EDEDF2 55%, #E2E4EC 100%); }
+#app[data-state="rain"]     { background: linear-gradient(180deg, #C3F8FF 0%, #D9F0FF 60%, #E4EDFF 100%); }
+#app[data-state="storm"]    { background: linear-gradient(180deg, #C8D2DC 0%, #D6DDE8 50%, #C4CED8 100%); }
+#app[data-state="watch"]    { background: linear-gradient(180deg, #F5F0E0 0%, #FAF4E4 55%, #F0EAD8 100%); }
+/* Fill phone screen on real devices */
+@media (max-width: 430px) {
+  body { padding: 0; background: var(--bg); align-items: stretch; }
+  #dev-toolbar { position: fixed; top: 12px; right: 12px; z-index: 20000; margin: 0; }
+  #sim-dropdown { left: auto; right: 0; transform: none; }
+  #app { width: 100%; min-height: 100dvh; border-radius: 0; box-shadow: none; }
+}
+
+/* ════════════════════════════════════════════════════
+   § 4  DEV TOOLBAR + SIMULATE DROPDOWN
+   Floats above phone shell on desktop only.
+════════════════════════════════════════════════════ */
+#dev-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  background: rgba(26,26,26,0.88);
+  backdrop-filter: blur(10px);
+  border-radius: var(--r-full);
+  padding: 6px 10px;
+  position: relative;
+  z-index: 20000;
+}
+.dev-btn {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: var(--r-full);
+  color: white;
+  font-size: 11px; font-weight: 600; font-family: var(--font);
+  padding: 5px 12px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  transition: background 0.15s, transform 0.12s;
+  letter-spacing: 0.2px;
+}
+.dev-btn:hover        { background: rgba(255,255,255,0.2); }
+.dev-btn:active       { transform: scale(0.96); }
+.dev-btn.active-state { background: rgba(75,174,232,0.35); border-color: rgba(75,174,232,0.6); }
+.dev-sep   { width: 1px; height: 20px; background: rgba(255,255,255,0.15); margin: 0 2px; }
+.dev-label { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 0.6px; text-transform: uppercase; padding: 0 4px; }
+
+/* Dropdown */
+#sim-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%; transform: translateX(-50%);
+  background: white;
+  border-radius: 14px; padding: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+  z-index: 20001; width: 200px;
+  display: none;
+  animation: dropdown-in 0.18s ease-out;
+}
+#sim-dropdown.open { display: block; }
+@keyframes dropdown-in {
+  from { opacity:0; transform: translateX(-50%) translateY(-6px); }
+  to   { opacity:1; transform: translateX(-50%) translateY(0); }
+}
+.sim-label   { font-size: 10px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; padding: 0 4px; }
+.sim-row     { display: flex; flex-direction: column; gap: 2px; }
+.sim-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  border: none; background: none; font-family: var(--font);
+  width: 100%; text-align: left; color: var(--text);
+  transition: background 0.1s;
+}
+.sim-btn:hover  { background: #F5F5F5; }
+.sim-btn.active { background: #EBF6FF; color: #2171B5; }
+.sim-btn .si    { font-size: 16px; width: 22px; text-align: center; }
+.sim-divider    { height: 1px; background: #F0F0F0; margin: 4px 0; }
+
+/* ════════════════════════════════════════════════════
+   § 5  PAGE SYSTEM
+════════════════════════════════════════════════════ */
+.page {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: calc(var(--nav-h) + 8px);
+  scrollbar-width: none;
+}
+.page::-webkit-scrollbar { display: none; }
+.page.active { display: flex; }
+
+/* ════════════════════════════════════════════════════
+   § 6  TOP BAR
+════════════════════════════════════════════════════ */
+.topbar {
+  height: var(--bar-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+  position: sticky; top: 0; z-index: 100;
+  background: transparent; backdrop-filter: blur(8px);
+}
+.topbar-left  { display: flex; align-items: center; gap: 8px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.location-dot  { width: 8px; height: 8px; border-radius: 50%; background: var(--active); flex-shrink: 0; }
+.location-meta { display: flex; flex-direction: column; }
+
+/* Home: larger location name */
+#home-location-name {
+  font-size: 22px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.5px; line-height: 1.15;
+  outline: none; border-radius: 4px; padding: 1px 4px; min-width: 40px;
+  transition: background 0.15s;
+}
+#home-location-name[contenteditable="true"]:focus {
+  background: rgba(255,255,255,0.55);
+  box-shadow: 0 0 0 2px rgba(75,174,232,0.4);
+}
+.location-name   { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+.topbar-datetime { font-size: 11px; color: var(--text-sec); font-weight: 400; padding-left: 4px; margin-top: 1px; }
+
+.icon-btn {
+  width: 34px; height: 34px; border: none;
+  background: rgba(255,255,255,0.5); border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; backdrop-filter: blur(4px);
+  transition: background 0.15s, transform 0.15s;
+}
+.icon-btn:hover  { background: rgba(255,255,255,0.75); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn svg    { width: 18px; height: 18px; }
+
+/* ════════════════════════════════════════════════════
+   § 7  BOTTOM NAV
+   position: absolute so it stays inside #app's
+   overflow:hidden clip — corners align, emergency
+   overlay fully covers it, no viewport-level escape.
+════════════════════════════════════════════════════ */
+#bottom-nav {
+  height: var(--nav-h);
+  background: rgba(255,255,255,0.88); backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255,255,255,0.3);
+  display: flex; align-items: center;
+  position: absolute; bottom: 0; left: 0; right: 0;
+  z-index: 100;
+  /* No border-radius needed — #app overflow:hidden clips to its own 40px corners */
+}
+.nav-tab {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px; cursor: pointer; padding: 8px 0;
+  border: none; background: none; transition: opacity 0.15s;
+}
+.nav-tab svg  { width: 22px; height: 22px; }
+.nav-tab span { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; color: var(--text-sec); transition: color 0.15s; }
+.nav-tab svg path, .nav-tab svg circle,
+.nav-tab svg rect, .nav-tab svg polyline { stroke: var(--text-sec); transition: stroke 0.15s; }
+.nav-tab.active span { color: var(--active); }
+.nav-tab.active svg path, .nav-tab.active svg circle,
+.nav-tab.active svg rect, .nav-tab.active svg polyline { stroke: var(--active); }
+
+/* ════════════════════════════════════════════════════
+   § 8  HOME — WEATHER HERO + ICONS
+════════════════════════════════════════════════════ */
+.home-content  { padding: 8px 20px 0; display: flex; flex-direction: column; gap: var(--section-gap); }
+.weather-hero  { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; gap: 4px; }
+.weather-icon-wrap {
+  width: 120px; height: 120px;
+  position: relative; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: transform 0.2s ease-out;
+}
+.weather-icon-wrap:hover  { transform: scale(1.05); }
+.weather-icon-wrap:active { transform: scale(0.97); }
+/* Tap animations — added/removed via JS */
+.weather-icon-wrap.tapped-rain  { animation: bounce-cloud 0.5s ease-out; }
+.weather-icon-wrap.tapped-sun   { animation: burst-sun   0.55s ease-out; }
+.weather-icon-wrap.tapped-storm { animation: zap-storm   0.4s  ease-out; }
+@keyframes bounce-cloud { 0%{transform:scale(1)} 25%{transform:scale(1.12) translateY(-6px)} 60%{transform:scale(0.96) translateY(2px)} 100%{transform:scale(1)} }
+@keyframes burst-sun    { 0%{transform:scale(1)} 30%{transform:scale(1.2) rotate(15deg)} 70%{transform:scale(0.95) rotate(-5deg)} 100%{transform:scale(1) rotate(0)} }
+@keyframes zap-storm    { 0%,100%{opacity:1;transform:scale(1)} 20%{opacity:0.4;transform:scale(1.08)} 50%{opacity:1;transform:scale(1.05)} 75%{opacity:0.6} }
+
+/* Animated rain cloud */
+.rain-group { animation: float-cloud 4s ease-in-out infinite; }
+.raindrop   { animation: fall-rain  1.2s linear infinite; opacity: 0; }
+.raindrop:nth-child(2) { animation-delay: 0.4s; }
+.raindrop:nth-child(3) { animation-delay: 0.8s; }
+@keyframes float-cloud { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@keyframes fall-rain   { 0%{transform:translateY(0);opacity:1} 100%{transform:translateY(14px);opacity:0} }
+.weather-icon-wrap.tapped-rain .raindrop { animation-duration: 0.5s !important; }
+
+/* Sun icon */
+.sun-core {
+  width: 60px; height: 60px; background: #FFD93D; border-radius: 50%;
+  box-shadow: 0 0 0 8px rgba(255,217,61,0.25), 0 0 0 16px rgba(255,217,61,0.1);
+  animation: pulse-sun 3s ease-in-out infinite; position: relative; z-index: 2;
+}
+@keyframes pulse-sun {
+  0%,100% { box-shadow: 0 0 0 8px rgba(255,217,61,0.25), 0 0 0 16px rgba(255,217,61,0.1); }
+  50%     { box-shadow: 0 0 0 14px rgba(255,217,61,0.3), 0 0 0 24px rgba(255,217,61,0.15); }
+}
+.sun-rays { position: absolute; inset: -20px; animation: spin-slow 12s linear infinite; }
+.sun-rays::before, .sun-rays::after { content: ''; position: absolute; background: rgba(255,217,61,0.55); border-radius: 3px; }
+.sun-rays::before { width: 4px; height: 14px; top: 0; left: 50%; transform: translateX(-50%); box-shadow: 0 116px 0 rgba(255,217,61,0.55), 58px 58px 0 rgba(255,217,61,0.55), -58px 58px 0 rgba(255,217,61,0.55); }
+.sun-rays::after  { width: 14px; height: 4px; top: 50%; left: 0; transform: translateY(-50%); box-shadow: 116px 0 0 rgba(255,217,61,0.55); }
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+
+/* Temp + label */
+.temp-main {
+  font-size: 48px; font-weight: 700; color: var(--text);
+  letter-spacing: -2px; line-height: 1;
+  outline: none; border-radius: 4px; padding: 2px 4px; transition: background 0.15s;
+}
+.temp-main[contenteditable="true"]:focus { background: rgba(255,255,255,0.5); }
+.weather-label { font-size: 16px; font-weight: 600; color: var(--text); }
+.temp-range    { font-size: 13px; color: var(--text-sec); }
+
+/* ════════════════════════════════════════════════════
+   § 9  HOME — VERDICT CARD
+════════════════════════════════════════════════════ */
+.verdict-card {
+  background: var(--card-bg); border-radius: var(--r-xl); padding: 16px;
+  box-shadow: var(--shadow-float); border: none;
+  cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  position: relative; overflow: hidden;
+}
+.verdict-card:hover  { transform: translateY(-1px); box-shadow: var(--shadow-up); }
+.verdict-card:active { transform: scale(0.99); }
+.verdict-label   { font-size: 11px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+.verdict-text {
+  font-size: 20px; font-weight: 700; color: var(--text);
+  line-height: 1.3; letter-spacing: -0.4px; margin-bottom: 8px;
+  outline: none; border-radius: 4px; padding: 2px 0;
+}
+.verdict-text[contenteditable="true"]:focus     { background: rgba(255,255,255,0.4); padding: 2px 4px; }
+.verdict-duration { font-size: 13px; color: var(--text-sec); line-height: 1.4; margin-bottom: 12px; outline: none; }
+.verdict-duration[contenteditable="true"]:focus { background: rgba(255,255,255,0.3); border-radius: 3px; padding: 1px 4px; }
+.verdict-footer  { display: flex; align-items: center; justify-content: space-between; }
+.gear-pills      { display: flex; flex-wrap: wrap; gap: 6px; }
+.gear-pill       { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: var(--r-full); background: rgba(255,255,255,0.65); color: var(--text); border: none; }
+.verdict-chevron { width: 28px; height: 28px; background: rgba(255,255,255,0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.confidence-line { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.08); display: flex; align-items: center; gap: 6px; }
+.conf-dot        { width: 6px; height: 6px; border-radius: 50%; background: #2ECC71; flex-shrink: 0; }
+.conf-text       { font-size: 12px; color: var(--text-sec); }
+.source-text     { font-size: 10px; color: var(--text-sec); opacity: 0.7; }
+
+/* ════════════════════════════════════════════════════
+   § 10  HOME — WATCH BANNER
+════════════════════════════════════════════════════ */
+.watch-banner {
+  background: #FFF3CD; border: none; border-radius: var(--r-md);
+  padding: 10px 14px; display: flex; align-items: flex-start; gap: 8px;
+  box-shadow: 0 2px 8px rgba(245,200,66,0.22);
+  animation: watch-pulse 3s ease-in-out infinite;
+}
+.watch-icon  { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.watch-title { font-size: 13px; font-weight: 700; color: #7A5800; margin-bottom: 2px; }
+.watch-sub   { font-size: 12px; color: #9A6E00; }
+@keyframes watch-pulse {
+  0%,100% { box-shadow: 0 2px 6px rgba(245,200,66,0.2); }
+  50%     { box-shadow: 0 2px 12px rgba(245,200,66,0.45); }
+}
+
+/* ════════════════════════════════════════════════════
+   § 11  HOME — HOURLY STRIP
+════════════════════════════════════════════════════ */
+.section-label { font-size: 12px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
+.hourly-scroll { overflow-x: auto; margin: 0 -20px; padding: 0 20px; scrollbar-width: none; }
+.hourly-scroll::-webkit-scrollbar { display: none; }
+.hourly-track  { display: flex; gap: 8px; width: max-content; padding-bottom: 4px; }
+.hour-card {
+  width: 64px; background: rgba(255,255,255,0.55); border-radius: var(--r-md); padding: 10px 6px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+.hour-card.now   { background: var(--card-bg); box-shadow: var(--shadow-float); }
+.hour-time       { font-size: 12px; color: var(--text-sec); }
+.hour-card.now .hour-time { font-weight: 600; color: var(--text); }
+.hour-temp       { font-size: 14px; font-weight: 600; color: var(--text); }
+.precip-bar-wrap { width: 24px; height: 28px; background: rgba(0,0,0,0.06); border-radius: 3px; display: flex; align-items: flex-end; overflow: hidden; }
+.precip-bar      { width: 100%; border-radius: 3px; }
+.precip-low      { background: #93E0FF; }
+.precip-med      { background: #4BAEE8; }
+.precip-high     { background: #2171B5; }
+
+/* ════════════════════════════════════════════════════
+   § 12  HOME — SEGMENT CARD
+════════════════════════════════════════════════════ */
+.segment-card    { background: var(--reminder-bg); border-radius: var(--r-xl); padding: 16px; border: none; box-shadow: var(--shadow-float); }
+.segment-header  { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.segment-icon    { width: 36px; height: 36px; background: rgba(255,255,255,0.6); border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.segment-title   { font-size: 14px; font-weight: 600; color: var(--text); }
+.segment-subtitle{ font-size: 11px; color: var(--text-sec); font-weight: 400; }
+.segment-verdict { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; outline: none; }
+.segment-verdict[contenteditable="true"]:focus { background: rgba(255,255,255,0.4); border-radius: 3px; padding: 2px 4px; }
+.segment-window  { font-size: 12px; color: var(--text-sec); line-height: 1.4; outline: none; }
+.segment-window[contenteditable="true"]:focus  { background: rgba(255,255,255,0.3); border-radius: 3px; padding: 1px 4px; }
+
+/* ════════════════════════════════════════════════════
+   § 13  HOME — CONDITIONS STATS GRID (2 × 3)
+════════════════════════════════════════════════════ */
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat-card  { background: rgba(255,255,255,0.5); border-radius: 12px; padding: 10px 6px; text-align: center; border: none; box-shadow: var(--shadow-sm); }
+.stat-icon  { font-size: 14px; margin-bottom: 3px; }
+.stat-value { font-size: 13px; font-weight: 600; color: var(--text); outline: none; }
+.stat-value[contenteditable="true"]:focus { background: rgba(255,255,255,0.5); border-radius: 3px; }
+.stat-label { font-size: 10px; color: var(--text-sec); margin-top: 2px; }
+
+/* ════════════════════════════════════════════════════
+   § 14  FORECAST PAGE
+════════════════════════════════════════════════════ */
+.forecast-content { padding: 8px 20px 0; display: flex; flex-direction: column; gap: 8px; }
+.day-row          { background: rgba(255,255,255,0.5); border-radius: 12px; border: none; box-shadow: var(--shadow-sm); overflow: hidden; cursor: pointer; transition: background 0.15s; }
+.day-row:hover    { background: rgba(255,255,255,0.7); }
+.day-row-header   { height: 60px; display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+.day-name         { font-size: 14px; font-weight: 600; color: var(--text); width: 36px; flex-shrink: 0; }
+.day-name.today   { color: var(--active); }
+.day-weather-icon { font-size: 22px; flex-shrink: 0; }
+.day-condition    { font-size: 12px; color: var(--text-sec); flex: 1; }
+.day-precip       { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #4BAEE8; font-weight: 600; width: 36px; flex-shrink: 0; }
+.day-temps        { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.temp-hi          { font-size: 15px; font-weight: 600; color: var(--text); }
+.temp-lo          { font-size: 13px; color: var(--text-sec); }
+.conf-bar         { height: 3px; border-radius: 2px; margin: 0 16px 8px; background: rgba(0,0,0,0.06); }
+.conf-bar-fill    { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #2ECC71, #F39C12); }
+.hourly-expand    { display: none; padding: 0 0 12px; border-top: var(--border); animation: slide-down 0.2s ease-out; }
+.hourly-expand.open { display: block; }
+@keyframes slide-down { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+.hourly-expand-scroll { overflow-x: auto; scrollbar-width: none; }
+.hourly-expand-scroll::-webkit-scrollbar { display: none; }
+.hourly-expand-track  { display: flex; gap: 4px; padding: 12px 16px 4px; width: max-content; }
+.exp-hour { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 52px; flex-shrink: 0; }
+.exp-time { font-size: 11px; color: var(--text-sec); }
+.exp-icon { font-size: 16px; }
+.exp-temp { font-size: 13px; font-weight: 600; color: var(--text); }
+.exp-rain { font-size: 11px; color: #4BAEE8; font-weight: 600; }
+.sun-strip { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 16px 4px; font-size: 13px; color: var(--text-sec); }
+.sun-strip span { display: flex; align-items: center; gap: 4px; }
+.sun-line { flex: 1; height: 2px; background: linear-gradient(90deg,#FFD93D,#FF6B35); border-radius: 2px; max-width: 80px; }
+
+/* ════════════════════════════════════════════════════
+   § 15  RADAR — MAP LAYERS
+════════════════════════════════════════════════════ */
+.radar-content { padding: 12px 20px 0; display: flex; flex-direction: column; gap: 14px; }
+.map-type-bar  { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.6); border-radius: var(--r-md); padding: 10px 12px; border: none; box-shadow: var(--shadow-sm); }
+.map-type-info { display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1; text-align: center; }
+.map-type-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.map-type-sub  { font-size: 11px; color: var(--text-sec); }
+.map-nav-btn {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.7); border: none; border-radius: 50%;
+  color: var(--text); cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s, transform 0.12s;
+  flex-shrink: 0;
+}
+.map-nav-btn:hover  { background: rgba(255,255,255,0.95); }
+.map-nav-btn:active { transform: scale(0.92); }
+
+/* Lightning toggle in controls row */
+.lightning-toggle-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 10px; border-radius: var(--r-full);
+  border: none; background: rgba(255,255,255,0.55);
+  color: var(--text-sec); font-size: 11px; font-weight: 600;
+  font-family: var(--font); cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.lightning-toggle-btn:hover { background: rgba(255,255,255,0.85); }
+.lightning-toggle-btn.on {
+  background: rgba(243,156,18,0.18);
+  color: #C87D00;
+  box-shadow: 0 0 0 1.5px rgba(243,156,18,0.4);
+}
+.radar-map-wrap {
+  position: relative; border-radius: var(--r-lg); overflow: hidden;
+  border: none; box-shadow: var(--shadow-float); height: 280px;
+  transform: translateZ(0); /* forces compositing layer — makes border-radius clip work in all browsers */
+  isolation: isolate;
+}
+/* All layers stacked; JS toggles .visible */
+.map-layer         { position: absolute; inset: 0; opacity: 0; transition: opacity 0.4s ease-out; pointer-events: none; }
+.map-layer.visible { opacity: 1; pointer-events: auto; }
+
+/* Layer: Rain */
+#map-rain { background: #DAEEFF; }
+#map-rain::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(0,120,200,0.08) 1px,transparent 1px),
+                    linear-gradient(90deg,rgba(0,120,200,0.08) 1px,transparent 1px);
+  background-size: 30px 30px;
+}
+.rain-cell { position: absolute; border-radius: 50%; filter: blur(12px); animation: pulse-rain 4s ease-in-out infinite; mix-blend-mode: multiply; }
+@keyframes pulse-rain { 0%,100%{opacity:0.55;transform:scale(1)} 50%{opacity:0.75;transform:scale(1.08)} }
+.rain-cell-1 { width:90px;  height:90px;  background:rgba(0,100,200,0.30); top:40px;  left:80px;              }
+.rain-cell-2 { width:120px; height:80px;  background:rgba(0,80,180,0.35);  top:80px;  left:140px; animation-delay:1s   }
+.rain-cell-3 { width:60px;  height:60px;  background:rgba(180,0,0,0.35);   top:100px; left:170px; animation-delay:0.5s }
+.rain-cell-4 { width:70px;  height:50px;  background:rgba(0,140,220,0.20); top:180px; left:60px;  animation-delay:2s   }
+.rain-cell-5 { width:50px;  height:50px;  background:rgba(0,100,200,0.20); top:220px; left:240px; animation-delay:1.5s }
+
+/* Layer: Satellite */
+#map-satellite { background: linear-gradient(135deg, #4A6741 0%, #6B8C5E 20%, #8FA888 35%, #C4B89A 50%, #A8936B 65%, #7D6B4F 80%, #5C5040 100%); }
+#map-satellite::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse 140px 80px at 60% 30%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.15) 50%, transparent 80%),
+              radial-gradient(ellipse 80px 50px at 20% 60%, rgba(255,255,255,0.35) 0%, transparent 70%);
+}
+.sat-cloud { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.5); filter: blur(6px); }
+
+/* Layer: Heat index */
+#map-heat { background: #1A1A2E; }
+.heat-zone { position: absolute; border-radius: 50%; filter: blur(18px); animation: pulse-rain 5s ease-in-out infinite; }
+.heat-1 { width:100px; height:100px; background:rgba(255,60,0,0.7);  top:50px;  left:120px;              }
+.heat-2 { width:80px;  height:70px;  background:rgba(255,140,0,0.6); top:90px;  left:60px;  animation-delay:1.2s }
+.heat-3 { width:60px;  height:60px;  background:rgba(255,200,0,0.5); top:160px; left:180px; animation-delay:0.7s }
+.heat-4 { width:40px;  height:40px;  background:rgba(255,80,0,0.5);  top:30px;  left:220px; animation-delay:2s   }
+.heat-legend { position: absolute; bottom: 12px; left: 14px; right: 14px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #0088FF 0%, #00FF88 25%, #FFEE00 50%, #FF8800 75%, #FF0000 100%); }
+.heat-legend-labels { position: absolute; bottom: 26px; left: 14px; right: 14px; display: flex; justify-content: space-between; }
+.heat-legend-labels span { font-size: 9px; color: rgba(255,255,255,0.7); font-weight: 600; }
+
+/* Layer: Cyclone */
+#map-cyclone { background: #0D1B2A; }
+.cyclone-grid::before { content:''; position:absolute; inset:0; background-image: linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px), linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px); background-size: 28px 28px; }
+.cyclone-cone { position:absolute; top:20px; left:30px; width:200px; height:140px; background: conic-gradient(from 10deg at 0% 50%, rgba(255,165,0,0.08) 0deg, rgba(255,165,0,0.18) 30deg, rgba(255,165,0,0.08) 60deg, transparent 60deg); border-radius: 0 120px 120px 0; }
+.cyclone-marker { position:absolute; top:75px; left:185px; }
+.cyclone-eye    { width:20px; height:20px; border-radius:50%; background:rgba(255,165,0,0.9); box-shadow:0 0 0 6px rgba(255,165,0,0.3), 0 0 0 14px rgba(255,165,0,0.12); animation:pulse-rain 2s ease-in-out infinite; }
+.cyclone-label  { position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:9px; font-weight:700; color:#FFA500; white-space:nowrap; }
+.cyclone-label-bar { position:absolute; bottom:10px; left:14px; font-size:11px; font-weight:600; color:rgba(255,165,0,0.85); }
+.track-dot { position:absolute; width:6px; height:6px; border-radius:50%; background:rgba(255,165,0,0.45); }
+
+/* Layer: Flood */
+#map-flood { background: #E8F4F0; }
+#map-flood::before { content:''; position:absolute; inset:0; background-image: linear-gradient(rgba(0,100,150,0.06) 1px,transparent 1px), linear-gradient(90deg,rgba(0,100,150,0.06) 1px,transparent 1px); background-size: 28px 28px; }
+.flood-zone  { position:absolute; border-radius:12px; }
+.flood-high  { background:rgba(0,50,180,0.28);   border:1.5px solid rgba(0,50,180,0.4);   }
+.flood-med   { background:rgba(0,120,220,0.18);  border:1.5px solid rgba(0,120,220,0.3);  }
+.flood-low   { background:rgba(100,180,240,0.15);border:1px   solid rgba(100,180,240,0.3);}
+.flood-label { position:absolute; font-size:9px; font-weight:700; color:rgba(0,50,180,0.8); text-transform:uppercase; letter-spacing:0.4px; }
+
+/* Location pin (shared across layers) */
+.radar-pin { position:absolute; top:130px; left:160px; display:flex; flex-direction:column; align-items:center; z-index:10; }
+.pin-dot   { width:12px; height:12px; background:var(--active); border-radius:50%; border:2px solid white; box-shadow:0 2px 6px rgba(216,64,64,0.45); }
+.pin-ring  { position:absolute; width:26px; height:26px; border:2px solid rgba(216,64,64,0.4); border-radius:50%; top:-7px; left:-7px; animation:ping 2s ease-out infinite; }
+@keyframes ping { 0%{transform:scale(1);opacity:0.6} 100%{transform:scale(1.9);opacity:0} }
+.pin-label { font-size:10px; font-weight:600; color:var(--text); background:white; padding:2px 6px; border-radius:var(--r-sm); margin-top:3px; box-shadow:0 1px 4px rgba(0,0,0,0.15); }
+
+/* Verdict bar pinned to map bottom */
+.radar-verdict { position:absolute; bottom:0; left:0; right:0; background:rgba(255,255,255,0.92); backdrop-filter:blur(8px); padding:8px 14px; border-top:var(--border); font-size:13px; font-weight:600; color:var(--text); }
+.radar-verdict span { color:var(--text-sec); font-weight:400; }
+
+/* ════════════════════════════════════════════════════
+   § 16  RADAR — LEGEND + SCRUBBER
+════════════════════════════════════════════════════ */
+.legend-row   { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.legend-label { font-size:11px; color:var(--text-sec); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+.legend-item  { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text-sec); }
+.legend-dot   { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.radar-controls { background:rgba(255,255,255,0.6); border-radius:var(--r-lg); padding:14px; border:none; box-shadow:var(--shadow-sm); }
+.time-label-row { display:flex; justify-content:space-between; margin-bottom:8px; }
+.time-lbl       { font-size:11px; color:var(--text-sec); }
+.time-lbl.active{ font-weight:600; color:var(--text); }
+.scrub-wrap  { position:relative; height:24px; display:flex; align-items:center; margin-bottom:12px; }
+.scrub-track { position:absolute; left:0; right:0; height:4px; background:rgba(0,0,0,0.1); border-radius:2px; }
+.scrub-fill  { height:100%; background:#4BAEE8; border-radius:2px; width:50%; transition:width 0.1s linear; }
+input[type="range"]#scrub { position:absolute; width:100%; height:4px; -webkit-appearance:none; background:transparent; cursor:pointer; }
+input[type="range"]#scrub::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:white; border:2px solid #4BAEE8; box-shadow:0 2px 6px rgba(0,0,0,0.15); }
+.play-row { display:flex; align-items:center; gap:12px; }
+.play-btn { width:38px; height:38px; border-radius:50%; background:#4BAEE8; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s; flex-shrink:0; }
+.play-btn:hover { background:#2171B5; }
+.play-btn svg { width:16px; height:16px; }
+.time-now-label { font-size:13px; font-weight:600; color:var(--text); flex:1; }
+
+/* ════════════════════════════════════════════════════
+   § 17  RADAR — CROWD REPORTS
+════════════════════════════════════════════════════ */
+.crowd-section { display:flex; flex-direction:column; gap:10px; }
+.crowd-header  { display:flex; align-items:center; justify-content:space-between; }
+.crowd-title   { font-size:12px; font-weight:600; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.6px; }
+.live-badge    { background:rgba(216,64,64,0.12); color:var(--active); font-size:10px; font-weight:700; padding:2px 8px; border-radius:var(--r-full); border:1px solid rgba(216,64,64,0.2); letter-spacing:0.4px; animation:live-blink 2s ease-in-out infinite; }
+@keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.report-cards  { display:flex; flex-direction:column; gap:6px; }
+.report-card   { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.55); border-radius:var(--r-md); padding:10px 12px; border:none; box-shadow:var(--shadow-sm); }
+.report-sev    { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.sev-high      { background:#D84040; box-shadow:0 0 0 3px rgba(216,64,64,0.2); }
+.sev-med       { background:#F39C12; box-shadow:0 0 0 3px rgba(243,156,18,0.2); }
+.sev-low       { background:#2ECC71; box-shadow:0 0 0 3px rgba(46,204,113,0.2); }
+.report-info   { flex:1; }
+.report-loc    { font-size:12px; font-weight:600; color:var(--text); }
+.report-detail { font-size:11px; color:var(--text-sec); margin-top:1px; }
+.report-time   { font-size:10px; color:var(--text-sec); opacity:0.7; white-space:nowrap; }
+.crowd-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.btn-report { padding:10px 12px; border-radius:var(--r-md); background:rgba(75,174,232,0.12); border:1.5px solid rgba(75,174,232,0.35); color:#2171B5; font-size:12px; font-weight:700; font-family:var(--font); cursor:pointer; transition:background 0.15s; display:flex; align-items:center; justify-content:center; gap:5px; }
+.btn-sos    { padding:10px 12px; border-radius:var(--r-md); background:rgba(216,64,64,0.10); border:1.5px solid rgba(216,64,64,0.30); color:var(--active); font-size:12px; font-weight:700; font-family:var(--font); cursor:pointer; transition:background 0.15s; display:flex; align-items:center; justify-content:center; gap:5px; }
+.btn-report:hover { background:rgba(75,174,232,0.2); }
+.btn-sos:hover    { background:rgba(216,64,64,0.18); }
+.btn-report:active, .btn-sos:active { transform:scale(0.97); }
+
+/* ════════════════════════════════════════════════════
+   § 18  SKELETON LOADER
+════════════════════════════════════════════════════ */
+#skeleton {
+  position:absolute; inset:0; background:var(--bg); z-index:9000;
+  border-radius:40px; padding:56px 20px 80px;
+  display:flex; flex-direction:column; gap:16px;
+  opacity:1; transition:opacity 0.4s ease-out;
+}
+#skeleton.hidden { opacity:0; pointer-events:none; }
+.sk-line {
+  border-radius:8px;
+  background:linear-gradient(90deg,rgba(255,255,255,0.2) 25%,rgba(255,255,255,0.5) 50%,rgba(255,255,255,0.2) 75%);
+  background-size:200% 100%;
+  animation:shimmer 1.5s infinite;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.sk-topbar { height:28px; width:120px; margin-bottom:8px; }
+.sk-hero   { height:140px; border-radius:16px; }
+.sk-card   { height:110px; border-radius:16px; }
+.sk-strip  { height:80px;  border-radius:12px; }
+.sk-segment{ height:88px;  border-radius:16px; }
+.sk-stats  { height:64px;  border-radius:12px; }
+
+/* ════════════════════════════════════════════════════
+   § 19  NOTIFICATIONS OVERLAY
+════════════════════════════════════════════════════ */
+#notif-overlay { display:none; position:absolute; inset:0; background:rgba(195,248,255,0.97); z-index:1000; flex-direction:column; border-radius:40px; animation:overlay-in 0.22s ease-out; backdrop-filter:blur(20px); }
+#notif-overlay.active { display:flex; }
+@keyframes overlay-in { from{opacity:0;transform:scale(0.98)} to{opacity:1;transform:scale(1)} }
+.notif-header { padding:20px 20px 0; display:flex; align-items:center; justify-content:space-between; }
+.notif-header-left { display:flex; flex-direction:column; }
+.notif-eyebrow { font-size:11px; font-weight:600; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:3px; }
+.notif-title   { font-size:22px; font-weight:700; color:var(--text); letter-spacing:-0.4px; }
+.notif-close-btn { width:34px; height:34px; border-radius:50%; background:rgba(0,0,0,0.08); border:none; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text); transition:background 0.15s; }
+.notif-close-btn:hover { background:rgba(0,0,0,0.14); }
+.notif-body { flex:1; overflow-y:auto; padding:20px; scrollbar-width:none; display:flex; flex-direction:column; gap:24px; }
+.notif-body::-webkit-scrollbar { display:none; }
+.notif-section-label { font-size:11px; font-weight:600; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.6px; margin-bottom:10px; }
+.notif-row { display:flex; align-items:center; justify-content:space-between; padding:13px 16px; background:rgba(255,255,255,0.6); border-radius:var(--r-md); border:var(--border); margin-bottom:6px; }
+.notif-row-left { display:flex; align-items:center; gap:12px; }
+.notif-row-icon  { font-size:20px; }
+.notif-row-label { font-size:14px; font-weight:600; color:var(--text); }
+.notif-row-sub   { font-size:12px; color:var(--text-sec); margin-top:1px; }
+.n-toggle { width:44px; height:26px; border-radius:999px; background:#E0E0E0; position:relative; cursor:pointer; transition:background 0.2s; flex-shrink:0; }
+.n-toggle.on     { background:#34C759; }
+.n-toggle.locked { background:var(--active); opacity:0.75; cursor:not-allowed; }
+.n-toggle .n-thumb { width:22px; height:22px; border-radius:50%; background:white; position:absolute; top:2px; left:2px; box-shadow:0 1px 4px rgba(0,0,0,0.2); transition:transform 0.2s; }
+.n-toggle.on .n-thumb, .n-toggle.locked .n-thumb { transform:translateX(18px); }
+.radius-options { display:flex; flex-direction:column; gap:6px; }
+.radius-option  { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border:1.5px solid #E5E5E5; border-radius:var(--r-md); cursor:pointer; background:rgba(255,255,255,0.6); transition:border-color 0.15s, background 0.15s; }
+.radius-option.selected { border-color:#4BAEE8; background:#EBF6FF; }
+.radius-option-label { font-size:14px; font-weight:600; color:var(--text); }
+.radius-option-sub   { font-size:12px; color:var(--text-sec); }
+.radius-check { width:20px; height:20px; border-radius:50%; border:2px solid #E0E0E0; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+.radius-option.selected .radius-check { border-color:#4BAEE8; background:#4BAEE8; }
+.radius-option.selected .radius-check::after { content:''; width:6px; height:6px; border-radius:50%; background:white; display:block; }
+.source-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.source-chip  { padding:5px 12px; background:rgba(255,255,255,0.7); border:var(--border); border-radius:var(--r-full); font-size:12px; font-weight:600; color:var(--text-sec); }
+
+/* ════════════════════════════════════════════════════
+   § 20  EMERGENCY OVERLAY
+════════════════════════════════════════════════════ */
+#emergency-overlay { display:none; position:absolute; inset:0; background:var(--em-bg); z-index:9999; flex-direction:column; border-radius:40px; overflow:hidden; animation:overlay-in 0.25s ease-out; }
+#emergency-overlay.active { display:flex; }
+.em-topbar { height:var(--bar-h); display:flex; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:1px solid var(--em-border); flex-shrink:0; }
+.em-source { font-size:12px; font-weight:600; color:var(--em-text); opacity:0.7; text-transform:uppercase; letter-spacing:0.5px; }
+.em-close  { width:32px; height:32px; border:1px solid var(--em-border); border-radius:50%; background:transparent; color:var(--em-text); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s; }
+.em-close:hover { background:var(--em-border); }
+.em-body   { flex:1; overflow-y:auto; scrollbar-width:none; padding:28px 24px 24px; display:flex; flex-direction:column; gap:22px; }
+.em-body::-webkit-scrollbar { display:none; }
+.em-alert-icon { width:88px; height:88px; border-radius:50%; border:2px solid var(--em-border); display:flex; align-items:center; justify-content:center; font-size:40px; align-self:center; animation:em-pulse 2s ease-in-out infinite; }
+@keyframes em-pulse {
+  0%,100% {
+    box-shadow: 0 0 0  0   rgba(216,64,64,0.00),
+                0 0 0  0   rgba(216,64,64,0.00);
+  }
+  50% {
+    box-shadow: 0 0 0  10px rgba(216,64,64,0.30),
+                0 0 24px 8px rgba(216,64,64,0.18);
+  }
+}
+.em-title  { font-size:28px; font-weight:700; color:var(--em-text); text-align:center; letter-spacing:-0.5px; line-height:1.2; }
+.em-signal { font-size:13px; font-weight:600; color:var(--em-btn); text-align:center; text-transform:uppercase; letter-spacing:1px; }
+.em-verdict-block { background:rgba(255,255,255,0.05); border:1px solid var(--em-border); border-radius:var(--r-lg); padding:16px; display:flex; flex-direction:column; gap:8px; }
+.em-verdict-text  { font-size:18px; font-weight:700; color:var(--em-text); line-height:1.4; }
+.em-duration      { font-size:14px; color:rgba(238,238,238,0.65); line-height:1.5; }
+.em-instructions  { display:flex; flex-direction:column; gap:10px; }
+.em-instruction-label { font-size:11px; font-weight:600; color:var(--em-btn); text-transform:uppercase; letter-spacing:0.6px; }
+.em-step     { display:flex; gap:10px; align-items:flex-start; }
+.em-step-num { width:20px; height:20px; border-radius:50%; background:var(--em-border); color:var(--em-text); font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+.em-step-text { font-size:14px; color:rgba(238,238,238,0.85); line-height:1.5; }
+.em-step-text strong { color:var(--em-text); }
+.em-map-sketch { background:rgba(255,255,255,0.04); border:1px solid var(--em-border); border-radius:var(--r-md); height:100px; position:relative; overflow:hidden; }
+.em-map-sketch::before { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px); background-size:20px 20px; }
+.em-map-label  { position:absolute; top:8px; left:12px; font-size:11px; color:rgba(238,238,238,0.4); text-transform:uppercase; letter-spacing:0.5px; }
+.em-rain-blob  { position:absolute; border-radius:50%; filter:blur(8px); background:rgba(216,64,64,0.4); animation:pulse-rain 3s ease-in-out infinite; }
+.em-rain-blob-1{ width:80px; height:60px; top:10px; left:60px; }
+.em-rain-blob-2{ width:50px; height:50px; top:30px; left:110px; animation-delay:1s; background:rgba(216,64,64,0.55); }
+.em-pin        { position:absolute; top:40px; left:175px; font-size:16px; }
+.em-pin-ring   { position:absolute; top:34px; left:169px; width:28px; height:28px; border:1.5px solid rgba(216,64,64,0.5); border-radius:50%; animation:ping 2s ease-out infinite; }
+.em-buttons    { display:flex; flex-direction:column; gap:10px; padding-top:4px; }
+.em-btn-share  { height:50px; background:var(--em-btn); border:none; border-radius:var(--r-lg); color:white; font-size:15px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; font-family:var(--font); transition:background 0.15s; }
+.em-btn-share:hover { background:#C0392B; }
+.em-btn-close  { height:46px; background:transparent; border:1px solid rgba(238,238,238,0.25); border-radius:var(--r-lg); color:var(--em-text); font-size:14px; font-weight:600; cursor:pointer; opacity:0.7; font-family:var(--font); transition:opacity 0.15s; }
+.em-btn-close:hover { opacity:1; }
+
+/* ════════════════════════════════════════════════════
+   § 21  SEARCH OVERLAY
+════════════════════════════════════════════════════ */
+#search-overlay { display:none; position:absolute; inset:0; background:rgba(195,248,255,0.97); z-index:1000; flex-direction:column; border-radius:40px; animation:overlay-in 0.2s ease-out; backdrop-filter:blur(20px); }
+#search-overlay.active { display:flex; }
+.search-header     { padding:20px 20px 12px; display:flex; align-items:center; gap:12px; }
+.search-input-wrap { flex:1; position:relative; }
+.search-input { width:100%; height:44px; background:white; border:1.5px solid rgba(0,0,0,0.1); border-radius:var(--r-lg); padding:0 44px 0 16px; font-size:16px; font-family:var(--font); color:var(--text); outline:none; transition:border-color 0.15s; }
+.search-input:focus { border-color:#4BAEE8; }
+.search-input-icon { position:absolute; right:12px; top:50%; transform:translateY(-50%); }
+.search-cancel     { font-size:14px; font-weight:600; color:var(--active); cursor:pointer; border:none; background:none; font-family:var(--font); }
+.search-body       { padding:0 20px; flex:1; overflow-y:auto; scrollbar-width:none; }
+.search-body::-webkit-scrollbar { display:none; }
+.search-section-label { font-size:11px; font-weight:600; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.6px; margin:16px 0 8px; }
+.search-city  { display:flex; align-items:center; padding:14px 0; border-bottom:var(--border); cursor:pointer; gap:12px; transition:opacity 0.15s; }
+.search-city:hover { opacity:0.7; }
+.search-city:last-child { border-bottom:none; }
+.city-flag    { font-size:20px; }
+.city-info    { flex:1; }
+.city-name    { font-size:15px; font-weight:600; color:var(--text); }
+.city-country { font-size:12px; color:var(--text-sec); }
+.city-weather { text-align:right; }
+.city-temp    { font-size:15px; font-weight:600; color:var(--text); }
+.city-condition { font-size:12px; color:var(--text-sec); }
+
+/* ════════════════════════════════════════════════════
+   § 22  VERDICT DETAIL SHEET
+════════════════════════════════════════════════════ */
+#verdict-detail { display:none; position:absolute; bottom:0; left:0; right:0; background:white; border-radius:24px 24px 0 0; z-index:1000; padding:20px 24px 32px; box-shadow:0 -8px 32px rgba(0,0,0,0.12); animation:slide-up 0.3s ease-out; }
+#verdict-detail.active { display:block; }
+#verdict-detail-backdrop { display:none; position:absolute; inset:0; background:rgba(0,0,0,0.3); z-index:999; border-radius:40px; }
+#verdict-detail-backdrop.active { display:block; }
+@keyframes slide-up { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.detail-handle      { width:36px; height:4px; background:rgba(0,0,0,0.12); border-radius:2px; margin:0 auto 16px; }
+.detail-title       { font-size:18px; font-weight:700; color:var(--text); margin-bottom:4px; }
+.detail-subtitle    { font-size:13px; color:var(--text-sec); margin-bottom:20px; }
+.detail-reason      { background:#F7F9FC; border-radius:var(--r-md); padding:14px; margin-bottom:12px; }
+.detail-reason-label{ font-size:11px; font-weight:600; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+.detail-reason-text { font-size:14px; color:var(--text); line-height:1.6; }
+.detail-source      { font-size:12px; color:var(--text-sec); display:flex; align-items:center; gap:6px; }
+.detail-close       { width:100%; height:48px; background:var(--text); border:none; border-radius:var(--r-lg); color:white; font-size:15px; font-weight:600; cursor:pointer; margin-top:16px; font-family:var(--font); transition:opacity 0.15s; }
+.detail-close:hover { opacity:0.85; }
+
+/* ════════════════════════════════════════════════════
+   § 23  TOAST
+════════════════════════════════════════════════════ */
+#toast {
+  position:absolute; bottom:calc(var(--nav-h) + 16px); left:50%; transform:translateX(-50%);
+  background:rgba(26,26,26,0.9); color:white; font-size:12px; font-weight:600;
+  padding:8px 16px; border-radius:var(--r-full); white-space:nowrap;
+  opacity:0; pointer-events:none; transition:opacity 0.25s; z-index:5000;
+  backdrop-filter:blur(8px);
+}
+
+/* ════════════════════════════════════════════════════
+   § 24  EDIT MODE BANNER
+════════════════════════════════════════════════════ */
+#edit-banner { position:absolute; top:0; left:0; right:0; background:rgba(75,174,232,0.92); color:white; font-size:11px; font-weight:600; text-align:center; padding:6px; z-index:200; letter-spacing:0.4px; display:none; }
+#edit-banner.active { display:block; }
+
+/* ════════════════════════════════════════════════════
+   § 25  SEGMENT CARD — THREE-DOT MENU + ACTIVITY SHEET
+════════════════════════════════════════════════════ */
+
+/* Three-dot button */
+.segment-menu-btn {
+  width: 30px; height: 30px;
+  border: none; background: rgba(255,255,255,0.5);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-sec); flex-shrink: 0;
+  transition: background 0.15s, transform 0.12s;
+}
+.segment-menu-btn:hover  { background: rgba(255,255,255,0.85); color: var(--text); }
+.segment-menu-btn:active { transform: scale(0.92); }
+
+/* Activity sheet backdrop */
+#activity-backdrop {
+  display: none;
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.28);
+  z-index: 1100;
+  border-radius: 40px;
+  animation: fade-in 0.18s ease;
+}
+#activity-backdrop.active { display: block; }
+@keyframes fade-in { from{opacity:0} to{opacity:1} }
+
+/* Activity sheet panel */
+#activity-sheet {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: white;
+  border-radius: 24px 24px 0 0;
+  z-index: 1101;
+  padding: 8px 24px 32px;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.14);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.22,1,0.36,1);
+}
+#activity-sheet.open { transform: translateY(0); }
+
+.act-handle {
+  width: 36px; height: 4px; background: rgba(0,0,0,0.1);
+  border-radius: 2px; margin: 8px auto 20px;
+}
+.act-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 3px; letter-spacing: -0.3px; }
+.act-sub   { font-size: 12px; color: var(--text-sec); margin-bottom: 18px; }
+.act-header { margin-bottom: 4px; }
+
+/* Preset chips grid */
+.act-presets {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 6px;
+}
+.act-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border: 1.5px solid #E8E8E8;
+  border-radius: var(--r-full);
+  background: #F9F9F9;
+  font-size: 13px; font-weight: 600; color: var(--text);
+  cursor: pointer;
+  transition: all 0.14s;
+  font-family: var(--font);
+  position: relative;
+}
+.act-chip:hover  { background: #F0F0F0; border-color: #C8C8C8; }
+.act-chip.active {
+  background: #EBF6FF; border-color: #4BAEE8; color: #2171B5;
+}
+.act-chip-emoji { font-size: 16px; }
+.act-chip-del {
+  display: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: rgba(0,0,0,0.12); border: none; cursor: pointer;
+  font-size: 10px; line-height: 1; color: var(--text-sec);
+  align-items: center; justify-content: center;
+  margin-left: 2px;
+  transition: background 0.12s;
+}
+.act-chip.custom .act-chip-del { display: flex; }
+.act-chip-del:hover { background: rgba(216,64,64,0.18); color: var(--active); }
+
+/* Divider */
+.act-divider { height: 1px; background: #F0F0F0; margin: 14px 0; }
+
+/* Custom activity input row */
+.act-custom-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.act-custom-input-wrap {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  background: #F5F5F5; border-radius: var(--r-full);
+  padding: 0 14px; height: 42px;
+}
+.act-custom-emoji { font-size: 16px; flex-shrink: 0; cursor: pointer; }
+.act-custom-input {
+  flex: 1; border: none; background: transparent;
+  font-size: 14px; font-family: var(--font); color: var(--text);
+  outline: none;
+}
+.act-custom-input::placeholder { color: var(--text-sec); }
+.act-add-btn {
+  height: 42px; padding: 0 18px;
+  background: var(--text); color: white; border: none;
+  border-radius: var(--r-full); font-size: 13px; font-weight: 600;
+  font-family: var(--font); cursor: pointer;
+  transition: background 0.15s, transform 0.12s;
+  flex-shrink: 0;
+}
+.act-add-btn:hover  { background: #333; }
+.act-add-btn:active { transform: scale(0.96); }
+</style>
+</head>
+<body>
+
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  DEV TOOLBAR                                     ║
+  ║  Sim buttons carry data-state — zero onclick     ║
+  ╚══════════════════════════════════════════════════╝
+-->
+<div id="dev-toolbar">
+  <span class="dev-label">Dev</span>
+  <div class="dev-sep"></div>
+  <button class="dev-btn" id="sim-btn">⚡ Simulate</button>
+  <button class="dev-btn" id="edit-btn">✏️ Edit</button>
+
+  <div id="sim-dropdown">
+    <div class="sim-label">Weather state</div>
+    <div class="sim-row">
+      <button class="sim-btn"        data-state="clear">     <span class="si">☀️</span>Clear</button>
+      <button class="sim-btn"        data-state="overcast">  <span class="si">⛅</span>Overcast</button>
+      <button class="sim-btn active" data-state="rain">      <span class="si">🌧</span>Rainy (default)</button>
+      <button class="sim-btn"        data-state="storm">     <span class="si">⛈</span>Thunderstorm</button>
+      <div class="sim-divider"></div>
+      <button class="sim-btn"        data-state="watch">     <span class="si">⚠️</span>Watch state</button>
+      <button class="sim-btn"        data-state="emergency"> <span class="si">🚨</span>Emergency</button>
+    </div>
+  </div>
+</div>
+
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  PHONE SHELL                                     ║
+  ╚══════════════════════════════════════════════════╝
+-->
+<div id="app">
+
+  <!-- Skeleton shimmer fades out after load -->
+  <div id="skeleton">
+    <div class="sk-line sk-topbar"></div>
+    <div class="sk-line sk-hero"></div>
+    <div class="sk-line sk-card"></div>
+    <div class="sk-line sk-strip"></div>
+    <div class="sk-line sk-segment"></div>
+    <div class="sk-line sk-stats"></div>
+  </div>
+
+  <div id="edit-banner">✏️ EDIT MODE · tap dashed fields · tap again to finish</div>
+
+  <!-- ═══ HOME ═══════════════════════════════════════ -->
+  <div class="page active" id="page-home">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="location-dot"></div>
+        <div class="location-meta">
+          <!--
+            data-location  → updated by Location.set(name) broadcast
+            id             → targeted by edit mode
+          -->
+          <span id="home-location-name" data-location>Shah Alam</span>
+          <span class="topbar-datetime" data-datetime></span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="search-btn" title="Search city">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+        <button class="icon-btn" id="notif-btn" title="Alert settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="12" y1="2" x2="12" y2="3"/></svg>
+        </button>
+        <button class="icon-btn" id="emergency-btn" title="Emergency">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#D84040" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="home-content">
+
+      <!-- Hero -->
+      <div class="weather-hero">
+        <div class="weather-icon-wrap" id="weather-icon-wrap">
+          <svg width="120" height="120" viewBox="0 0 120 120" id="icon-rain">
+            <g class="rain-group" transform="translate(10,10)">
+              <ellipse cx="55" cy="42" rx="30" ry="20" fill="#B8D4F0"/>
+              <ellipse cx="35" cy="48" rx="20" ry="16" fill="#B8D4F0"/>
+              <ellipse cx="72" cy="50" rx="18" ry="14" fill="#B8D4F0"/>
+              <rect x="20" y="48" width="70" height="20" fill="#B8D4F0"/>
+              <ellipse cx="48" cy="36" rx="16" ry="10" fill="#D0E8FF" opacity="0.6"/>
+              <line class="raindrop" x1="38" y1="72" x2="34" y2="86" stroke="#4BAEE8" stroke-width="2.5" stroke-linecap="round"/>
+              <line class="raindrop" x1="55" y1="72" x2="51" y2="86" stroke="#4BAEE8" stroke-width="2.5" stroke-linecap="round"/>
+              <line class="raindrop" x1="72" y1="72" x2="68" y2="86" stroke="#4BAEE8" stroke-width="2.5" stroke-linecap="round"/>
+            </g>
+          </svg>
+          <div id="icon-sun" style="display:none;position:relative;width:100px;height:100px;align-items:center;justify-content:center;">
+            <div class="sun-rays"></div><div class="sun-core"></div>
+          </div>
+          <svg width="120" height="120" viewBox="0 0 120 120" id="icon-storm" style="display:none">
+            <g class="rain-group" transform="translate(5,5)">
+              <ellipse cx="55" cy="40" rx="32" ry="22" fill="#7A8FA0"/>
+              <ellipse cx="33" cy="47" rx="22" ry="17" fill="#7A8FA0"/>
+              <ellipse cx="74" cy="50" rx="20" ry="15" fill="#7A8FA0"/>
+              <rect x="18" y="48" width="74" height="22" fill="#7A8FA0"/>
+              <polygon points="55,62 45,78 54,78 47,94 66,73 57,73" fill="#FFD93D"/>
+            </g>
+          </svg>
+          <svg width="120" height="120" viewBox="0 0 120 120" id="icon-overcast" style="display:none">
+            <g class="rain-group" transform="translate(10,15)">
+              <ellipse cx="55" cy="42" rx="30" ry="20" fill="#C8D8E8"/>
+              <ellipse cx="35" cy="48" rx="20" ry="16" fill="#C8D8E8"/>
+              <ellipse cx="72" cy="50" rx="18" ry="14" fill="#C8D8E8"/>
+              <rect x="20" y="48" width="70" height="20" fill="#C8D8E8"/>
+              <ellipse cx="48" cy="36" rx="16" ry="10" fill="#DCE8F0" opacity="0.7"/>
+            </g>
+          </svg>
+        </div>
+        <div class="temp-main"    id="temp-main">30°</div>
+        <div class="weather-label" id="weather-label">Rainy</div>
+        <div class="temp-range"    id="temp-range">↑34° ↓25° · Feels like 35°</div>
+      </div>
+
+      <!-- Verdict card -->
+      <div class="verdict-card" id="verdict-card">
+        <div class="verdict-label">Today's verdict</div>
+        <div class="verdict-text"     id="verdict-text">Bring umbrella — heavy rain arriving 3–5pm</div>
+        <div class="verdict-duration" id="verdict-duration">Storms clearing by 21:30 · 0.41mm expected</div>
+        <div class="verdict-footer">
+          <div class="gear-pills" id="gear-pills">
+            <!-- Initial pills — replaced by T.gearPills() on first applyState() -->
+            <span class="gear-pill">☂ Umbrella</span>
+            <span class="gear-pill">🧥 Light jacket</span>
+          </div>
+          <div class="verdict-chevron">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+        <div class="confidence-line">
+          <div class="conf-dot"  id="conf-dot"></div>
+          <div class="conf-text" id="conf-text">High confidence · next update 20:00</div>
+          <div class="source-text" style="margin-left:auto">MetMalaysia · JPS</div>
+        </div>
+      </div>
+
+      <!-- Watch banner -->
+      <div class="watch-banner" id="watch-banner" style="display:none">
+        <div class="watch-icon">⚠️</div>
+        <div>
+          <div class="watch-title">Weather Watch · Active</div>
+          <div class="watch-sub">Heavy thunderstorms possible 3–6pm · Monitor updates</div>
+        </div>
+      </div>
+
+      <!-- Hourly — populated by renderHourly() -->
+      <div>
+        <div class="section-label">Hourly forecast</div>
+        <div class="hourly-scroll"><div class="hourly-track" id="hourly-track"></div></div>
+      </div>
+
+      <!-- Segment card -->
+      <div class="segment-card">
+        <div class="segment-header">
+          <div class="segment-icon" id="segment-icon">🏃</div>
+          <div style="flex:1">
+            <div class="segment-title"    id="segment-title">Running</div>
+            <div class="segment-subtitle" id="segment-subtitle">Your activity</div>
+          </div>
+          <!-- Three-dot menu -->
+          <button class="segment-menu-btn" id="segment-menu-btn" title="Change activity" aria-label="Change activity">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5"  r="1.5"/>
+              <circle cx="12" cy="12" r="1.5"/>
+              <circle cx="12" cy="19" r="1.5"/>
+            </svg>
+          </button>
+        </div>
+        <div class="segment-verdict" id="segment-verdict">Not suitable tonight — storms 7–9pm</div>
+        <div class="segment-window"  id="segment-window">Best window tomorrow: 6–8am (clear, 25°, low humidity)</div>
+      </div>
+
+      <!-- Stats -->
+      <div>
+        <div class="section-label">Conditions</div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon">💧</div><div class="stat-value" id="stat-humidity">66%</div>   <div class="stat-label">Humidity</div></div>
+          <div class="stat-card"><div class="stat-icon">💨</div><div class="stat-value" id="stat-wind">9km/h</div>     <div class="stat-label">Wind</div></div>
+          <div class="stat-card"><div class="stat-icon">☀️</div><div class="stat-value" id="stat-uv">Low</div>         <div class="stat-label">UV Index</div></div>
+          <div class="stat-card"><div class="stat-icon">🌫</div><div class="stat-value" id="stat-aqi">52 AQI</div>     <div class="stat-label">Air Quality</div></div>
+          <div class="stat-card"><div class="stat-icon">🌡</div><div class="stat-value" id="stat-pressure">1008mb</div><div class="stat-label">Pressure</div></div>
+          <div class="stat-card"><div class="stat-icon">👁</div><div class="stat-value" id="stat-vis">10km</div>        <div class="stat-label">Visibility</div></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /home -->
+
+  <!-- ═══ FORECAST — rows populated by renderForecast() ═══ -->
+  <div class="page" id="page-forecast">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="location-dot"></div>
+        <div class="location-meta">
+          <span class="location-name" data-location>Shah Alam</span>
+          <span class="topbar-datetime" data-datetime></span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="fc-search-btn" title="Search city">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="forecast-content" id="forecast-list"></div>
+  </div><!-- /forecast -->
+
+  <!-- ═══ RADAR ═══════════════════════════════════════ -->
+  <div class="page" id="page-radar">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="location-dot"></div>
+        <div class="location-meta">
+          <span class="location-name" data-location>Shah Alam</span>
+          <span class="topbar-datetime" data-datetime></span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <!-- Lightning toggle lives here only (not duplicated in controls) -->
+      </div>
+    </div>
+
+    <div class="radar-content">
+      <!-- Map layer selector: ‹ name › -->
+      <div class="map-type-bar">
+        <button class="map-nav-btn" id="map-prev-btn" aria-label="Previous map layer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="map-type-info">
+          <span class="map-type-name" id="map-type-name">Rain Radar</span>
+          <span class="map-type-sub"  id="map-type-sub">Live · Updated 1 min ago</span>
+        </div>
+        <button class="map-nav-btn" id="map-next-btn" aria-label="Next map layer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <div class="radar-map-wrap">
+        <!-- Layer 1: Rain (default) -->
+        <div class="map-layer visible" id="map-rain">
+          <div class="rain-cell rain-cell-1"></div><div class="rain-cell rain-cell-2"></div>
+          <div class="rain-cell rain-cell-3"></div><div class="rain-cell rain-cell-4"></div>
+          <div class="rain-cell rain-cell-5"></div>
+          <div id="lightning-layer" style="display:none;position:absolute;inset:0">
+            <div style="position:absolute;top:80px;left:150px;font-size:22px;animation:pulse-rain 1.5s ease-in-out infinite">⚡</div>
+            <div style="position:absolute;top:120px;left:195px;font-size:16px;animation:pulse-rain 2s ease-in-out infinite .5s;opacity:0.7">⚡</div>
+            <div style="position:absolute;top:70px;left:105px;font-size:14px;animation:pulse-rain 1.8s ease-in-out infinite 1s;opacity:0.6">⚡</div>
+          </div>
+        </div>
+        <!-- Layer 2: Satellite -->
+        <div class="map-layer" id="map-satellite">
+          <div class="sat-cloud" style="width:120px;height:60px;top:20px;left:80px;opacity:0.85"></div>
+          <div class="sat-cloud" style="width:80px;height:45px;top:60px;left:180px;opacity:0.7"></div>
+          <div class="sat-cloud" style="width:50px;height:30px;top:150px;left:40px;opacity:0.6"></div>
+          <div style="position:absolute;bottom:10px;left:14px;font-size:10px;color:rgba(255,255,255,0.6);font-weight:600;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.5)">TERRA/AQUA MODIS · 250m</div>
+        </div>
+        <!-- Layer 3: Heat -->
+        <div class="map-layer" id="map-heat">
+          <div class="heat-zone heat-1"></div><div class="heat-zone heat-2"></div>
+          <div class="heat-zone heat-3"></div><div class="heat-zone heat-4"></div>
+          <div class="heat-legend"></div>
+          <div class="heat-legend-labels"><span>25°</span><span>30°</span><span>35°</span><span>40°</span><span>45°</span></div>
+        </div>
+        <!-- Layer 4: Cyclone -->
+        <div class="map-layer" id="map-cyclone">
+          <div style="position:absolute;inset:0" class="cyclone-grid"></div>
+          <div class="cyclone-cone"></div>
+          <div class="track-dot" style="top:200px;left:40px;opacity:0.3"></div>
+          <div class="track-dot" style="top:170px;left:70px;opacity:0.4"></div>
+          <div class="track-dot" style="top:145px;left:100px;opacity:0.55"></div>
+          <div class="track-dot" style="top:120px;left:135px;opacity:0.7"></div>
+          <div class="track-dot" style="top:100px;left:162px;opacity:0.85"></div>
+          <div class="cyclone-marker"><div class="cyclone-label">Typhoon Isa · Cat 2</div><div class="cyclone-eye"></div></div>
+          <div class="cyclone-label-bar">Projected track · 72h · Source: JMA</div>
+        </div>
+        <!-- Layer 5: Flood -->
+        <div class="map-layer" id="map-flood">
+          <div class="flood-zone flood-high" style="width:90px;height:60px;top:60px;left:80px"></div>
+          <div class="flood-zone flood-high" style="width:70px;height:50px;top:100px;left:150px"></div>
+          <div class="flood-zone flood-med"  style="width:110px;height:70px;top:130px;left:50px"></div>
+          <div class="flood-zone flood-low"  style="width:80px;height:60px;top:50px;left:220px"></div>
+          <div class="flood-label" style="top:72px;left:90px">HIGH</div>
+          <div class="flood-label" style="top:112px;left:157px">HIGH</div>
+          <div class="flood-label" style="top:158px;left:80px">MED</div>
+          <div class="flood-label" style="top:62px;left:228px">LOW</div>
+          <div style="position:absolute;bottom:10px;left:14px;font-size:10px;color:rgba(0,50,120,0.7);font-weight:700;letter-spacing:0.4px">JPS Flood Risk Zones · Selangor</div>
+        </div>
+        <!-- Pin floats above all layers -->
+        <div class="radar-pin" style="z-index:20">
+          <div class="pin-ring"></div><div class="pin-dot"></div>
+          <!-- data-location keeps pin in sync with Location store -->
+          <div class="pin-label" data-location>Shah Alam</div>
+        </div>
+        <div class="radar-verdict" id="radar-verdict-bar">
+          ⛈ Storms continuing until 21:15 <span>· Moving SW at 18km/h</span>
+        </div>
+      </div><!-- /radar-map-wrap -->
+
+      <div class="legend-row">
+        <span class="legend-label">Intensity</span>
+        <div class="legend-item"><div class="legend-dot" style="background:#93E0FF"></div>Light</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4BAEE8"></div>Moderate</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2171B5"></div>Heavy</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8B0000"></div>Extreme</div>
+        <div id="lightning-legend" style="display:none" class="legend-item"><div class="legend-dot" style="background:#F39C12"></div>Lightning</div>
+      </div>
+
+      <div class="radar-controls">
+        <div class="time-label-row">
+          <span class="time-lbl">−2h</span><span class="time-lbl">−1h</span>
+          <span class="time-lbl active">Now</span>
+          <span class="time-lbl">+1h</span><span class="time-lbl">+2h</span>
+        </div>
+        <div class="scrub-wrap">
+          <div class="scrub-track"><div class="scrub-fill" id="scrub-fill"></div></div>
+          <input type="range" id="scrub" min="0" max="100" value="50">
+        </div>
+        <div class="play-row">
+          <button class="play-btn" id="play-btn">
+            <svg id="play-icon" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5,3 19,12 5,21"/></svg>
+          </button>
+          <div class="time-now-label" id="time-label">19:42 MYT</div>
+          <!-- Lightning: contextual toggle, lives with controls not topbar -->
+          <button class="lightning-toggle-btn" id="lightning-btn" title="Toggle lightning overlay">
+            ⚡ Lightning
+          </button>
+        </div>
+      </div>
+
+      <!-- Crowd reports — cards populated by renderCrowdReports() -->
+      <div class="crowd-section">
+        <div class="crowd-header">
+          <span class="crowd-title">Community Reports</span>
+          <span class="live-badge">● LIVE 12</span>
+        </div>
+        <div class="report-cards" id="report-cards"></div>
+        <div class="crowd-actions">
+          <button class="btn-report" id="btn-report">📍 Report hazard</button>
+          <button class="btn-sos"    id="btn-sos">🆘 Ask for help</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /radar -->
+
+  <!-- ═══ BOTTOM NAV — data-page drives delegation, no onclick ═══ -->
+  <nav id="bottom-nav">
+    <button class="nav-tab active" data-page="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="nav-tab" data-page="forecast">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>Forecast</span>
+    </button>
+    <button class="nav-tab" data-page="radar">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
+      <span>Radar</span>
+    </button>
+  </nav>
+
+  <!-- ═══ OVERLAYS ═══════════════════════════════════ -->
+
+  <!-- Notifications — n-toggle and radius clicks handled by delegation -->
+  <div id="notif-overlay">
+    <div class="notif-header">
+      <div class="notif-header-left">
+        <span class="notif-eyebrow">Configure</span>
+        <span class="notif-title">Alert Settings</span>
+      </div>
+      <button class="notif-close-btn" id="notif-close-btn">✕</button>
+    </div>
+    <div class="notif-body">
+      <div>
+        <div class="notif-section-label">Notifications</div>
+        <div class="notif-row"><div class="notif-row-left"><span class="notif-row-icon">🌧</span><div><div class="notif-row-label">Rain alerts</div><div class="notif-row-sub">30–60 min before heavy rain</div></div></div><div class="n-toggle on"><div class="n-thumb"></div></div></div>
+        <div class="notif-row"><div class="notif-row-left"><span class="notif-row-icon">⛈</span><div><div class="notif-row-label">Thunderstorm warnings</div><div class="notif-row-sub">Severe cells approaching</div></div></div><div class="n-toggle on"><div class="n-thumb"></div></div></div>
+        <div class="notif-row"><div class="notif-row-left"><span class="notif-row-icon">🌊</span><div><div class="notif-row-label">Flood warnings</div><div class="notif-row-sub">JPS official flood alerts</div></div></div><div class="n-toggle on"><div class="n-thumb"></div></div></div>
+        <div class="notif-row"><div class="notif-row-left"><span class="notif-row-icon">🌫</span><div><div class="notif-row-label">Haze / AQI alerts</div><div class="notif-row-sub">When API/PSI reaches Unhealthy</div></div></div><div class="n-toggle"><div class="n-thumb"></div></div></div>
+        <div class="notif-row"><div class="notif-row-left"><span class="notif-row-icon">🚨</span><div><div class="notif-row-label">Emergency override</div><div class="notif-row-sub">Always on · cannot be disabled</div></div></div><div class="n-toggle locked"><div class="n-thumb"></div></div></div>
+      </div>
+      <div>
+        <div class="notif-section-label">Alert radius</div>
+        <div class="radius-options">
+          <div class="radius-option"><div><div class="radius-option-label">Exact location</div><div class="radius-option-sub">Only alert when weather directly affects you</div></div><div class="radius-check"></div></div>
+          <div class="radius-option selected"><div><div class="radius-option-label">My city</div><div class="radius-option-sub">Shah Alam / Petaling Jaya area</div></div><div class="radius-check"></div></div>
+          <div class="radius-option"><div><div class="radius-option-label">Surrounding area</div><div class="radius-option-sub">Selangor + KL region</div></div><div class="radius-check"></div></div>
+        </div>
+      </div>
+      <div>
+        <div class="notif-section-label">Data sources</div>
+        <div class="source-chips">
+          <span class="source-chip">MetMalaysia</span><span class="source-chip">JPS Flood</span>
+          <span class="source-chip">APIMS (AQI)</span><span class="source-chip">USGS (Quake)</span>
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--text-sec);line-height:1.5">Data updated every 10–15 min. Emergency alerts pushed as soon as official signals are issued.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Emergency -->
+  <div id="emergency-overlay">
+    <div class="em-topbar">
+      <div class="em-source">Malaysia Meteorological Dept</div>
+      <button class="em-close" id="em-close-btn">✕</button>
+    </div>
+    <div class="em-body">
+      <div class="em-alert-icon">⚠️</div>
+      <div>
+        <div class="em-signal">Flood Warning · Active</div>
+        <div class="em-title">Flash Flood Warning<br>Shah Alam</div>
+      </div>
+      <div class="em-verdict-block">
+        <div class="em-verdict-text">Stay indoors. Move to higher ground if in low-lying area.</div>
+        <div class="em-duration">Expected to lift by 23:00 · Issued 19:30 · 3h 30m remaining</div>
+      </div>
+      <div class="em-instructions">
+        <div class="em-instruction-label">What to do now</div>
+        <div class="em-step"><div class="em-step-num">1</div><div class="em-step-text"><strong>Stay off roads.</strong> Flash flooding expected in low-lying areas including Seksyen 15–19.</div></div>
+        <div class="em-step"><div class="em-step-num">2</div><div class="em-step-text"><strong>Move valuables upstairs</strong> if in ground floor unit or landed property.</div></div>
+        <div class="em-step"><div class="em-step-num">3</div><div class="em-step-text"><strong>Emergency line: 999</strong> or nearest relief centre: Dewan Badminton Shah Alam (2.4km).</div></div>
+      </div>
+      <div class="em-map-sketch">
+        <div class="em-map-label">Rain radar · Shah Alam</div>
+        <div class="em-rain-blob em-rain-blob-1"></div><div class="em-rain-blob em-rain-blob-2"></div>
+        <div class="em-pin-ring"></div><div class="em-pin">📍</div>
+      </div>
+      <div class="em-buttons">
+        <button class="em-btn-share" id="em-share-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          Share official alert
+        </button>
+        <button class="em-btn-close" id="em-close-return">Got it — return to app</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search — city rows carry data-city for delegation -->
+  <div id="search-overlay">
+    <div class="search-header">
+      <div class="search-input-wrap">
+        <input class="search-input" id="search-input" type="text" placeholder="Search city...">
+        <span class="search-input-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+      </div>
+      <button class="search-cancel" id="search-cancel-btn">Cancel</button>
+    </div>
+    <div class="search-body" id="search-body"></div>
+  </div>
+
+  <!-- Verdict detail -->
+  <div id="verdict-detail-backdrop"></div>
+  <div id="verdict-detail">
+    <div class="detail-handle"></div>
+    <div class="detail-title">Heavy rain arriving 3–5pm</div>
+    <div class="detail-subtitle">Why the app thinks this — reasoning breakdown</div>
+    <div class="detail-reason"><div class="detail-reason-label">Radar movement</div><div class="detail-reason-text">A slow-moving storm cell is 28km northwest of Shah Alam, moving SE at 18km/h. At current speed, it will reach your location at approximately 15:00.</div></div>
+    <div class="detail-reason"><div class="detail-reason-label">Rainfall intensity</div><div class="detail-reason-text">Current radar shows 0.41mm/hour at the cell centre. Sufficient to cause minor street flooding in Seksyen 15–19.</div></div>
+    <div class="detail-reason"><div class="detail-reason-label">Duration estimate</div><div class="detail-reason-text">Based on the cell's size (~40km diameter) and speed, it will pass through in approximately 2.5–3 hours. Clear by 21:30.</div></div>
+    <div class="detail-source"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Data: MetMalaysia radar · JPS flood data · Updated 19:34</div>
+    <button class="detail-close" id="detail-close-btn">Got it</button>
+  </div>
+
+  <!-- Activity picker sheet -->
+  <div id="activity-backdrop"></div>
+  <div id="activity-sheet">
+    <div class="act-handle"></div>
+    <div class="act-header">
+      <div class="act-title">Your Activity</div>
+      <div class="act-sub">Choose what the weather verdict is for</div>
+    </div>
+    <!-- Preset activity chips — populated by renderActivitySheet() -->
+    <div class="act-presets" id="act-presets"></div>
+    <!-- Add custom row -->
+    <div class="act-divider"></div>
+    <div class="act-custom-row">
+      <div class="act-custom-input-wrap">
+        <span class="act-custom-emoji" id="act-custom-emoji">✏️</span>
+        <input class="act-custom-input" id="act-custom-input" type="text" placeholder="Add custom activity…" maxlength="24">
+      </div>
+      <button class="act-add-btn" id="act-add-btn">Add</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div><!-- /#app -->
+
+<script>
+/*
+ * ══════════════════════════════════════════════════════
+ *  CUACA — Refactored JS
+ *
+ *  Structure (each section tagged):
+ *   § 1  DATA          — all static content as plain objects
+ *   § 2  Templates (T) — pure (data → HTML string) functions
+ *   § 3  Renderers     — write templates into DOM containers
+ *   § 4  Location      — single store, [data-location] broadcast
+ *   § 5  Clock         — [data-datetime] broadcast
+ *   § 6  Navigation    — page switching
+ *   § 7  Overlays      — open/close helpers
+ *   § 8  Radar         — scrubber, play, lightning, map carousel
+ *   § 9  Simulate      — state switcher
+ *   § 10 Edit mode     — contentEditable toggle
+ *   § 11 Events        — ALL addEventListener wiring, zero onclick
+ *   § 12 Init          — boot sequence
+ *
+ *  Entire block is an IIFE → zero globals exported.
+ * ══════════════════════════════════════════════════════
+ */
+(function () {
+  'use strict';
+
+  /* ════════════════════════════════════════════════
+     § 1  DATA
+     Change content here — UI updates automatically.
+  ════════════════════════════════════════════════ */
+  const DATA = {
+
+    hourly: [
+      { time:'Now',   icon:'🌧', temp:'30°', precip:'65%', cls:'precip-med',  now:true  },
+      { time:'20:00', icon:'⛈', temp:'28°', precip:'90%', cls:'precip-high', now:false },
+      { time:'21:00', icon:'🌧', temp:'27°', precip:'50%', cls:'precip-med',  now:false },
+      { time:'22:00', icon:'🌦', temp:'27°', precip:'20%', cls:'precip-low',  now:false },
+      { time:'23:00', icon:'🌙', temp:'26°', precip:'5%',  cls:'precip-low',  now:false },
+      { time:'00:00', icon:'🌙', temp:'25°', precip:'5%',  cls:'precip-low',  now:false },
+      { time:'01:00', icon:'🌙', temp:'25°', precip:null,  cls:'',            now:false },
+    ],
+
+    forecast: [
+      {
+        label:'Today', icon:'🌧', condition:'Rainy · showers',
+        precip:'80%', hi:'34°', lo:'25°', conf:85,
+        sunrise:'07:20', sunset:'19:26',
+        hours:[
+          {time:'09:00',icon:'🌦',temp:'29°',rain:'30%'},
+          {time:'12:00',icon:'⛅',temp:'33°',rain:'10%'},
+          {time:'15:00',icon:'🌧',temp:'30°',rain:'90%'},
+          {time:'17:00',icon:'🌧',temp:'28°',rain:'80%'},
+          {time:'21:00',icon:'🌙',temp:'26°',rain:'10%'},
+        ],
+      },
+      { label:'Sat', icon:'⛈', condition:'Thunderstorm',    precip:'42%', hi:'35°', lo:'25°', conf:80,
+        sunrise:'07:20', sunset:'19:26',
+        hours:[{time:'06:00',icon:'🌤',temp:'26°',rain:'5%'},{time:'15:00',icon:'⛈',temp:'32°',rain:'65%'},{time:'21:00',icon:'🌙',temp:'26°',rain:'10%'}] },
+      { label:'Sun', icon:'⛈', condition:'Thundery showers', precip:'46%', hi:'34°', lo:'25°', conf:75,
+        sunrise:'07:20', sunset:'19:26',
+        hours:[{time:'06:00',icon:'🌤',temp:'25°',rain:'5%'},{time:'14:00',icon:'⛈',temp:'33°',rain:'70%'},{time:'22:00',icon:'🌙',temp:'25°',rain:'10%'}] },
+      { label:'Mon', icon:'🌧', condition:'Rainy',           precip:'58%', hi:'34°', lo:'25°', conf:65,
+        sunrise:'07:20', sunset:'19:26',
+        hours:[{time:'06:00',icon:'🌦',temp:'25°',rain:'30%'},{time:'14:00',icon:'🌧',temp:'31°',rain:'75%'}] },
+      { label:'Tue', icon:'⛈', condition:'Thunderstorm',    precip:'45%', hi:'36°', lo:'25°', conf:55, note:'Moderate confidence — check Monday for reliable forecast' },
+      { label:'Wed', icon:'🌧', condition:'Light showers',   precip:'41%', hi:'35°', lo:'25°', conf:45, note:'Low confidence — forecast unreliable this far out'  },
+      { label:'Thu', icon:'🌤', condition:'Partly cloudy',   precip:'30%', hi:'35°', lo:'25°', conf:35, note:'Low confidence — check Wednesday for reliable forecast' },
+    ],
+
+    /*
+     * cities: keyed by name for O(1) lookup in selectCity().
+     * searchList: ordered array for rendering (controls Recent/Popular grouping).
+     */
+    cities: {
+      'Tokyo':        { country:'Japan',       flag:'🇯🇵', temp:'8°C',  condition:'Cloudy',        verdict:'Pack for cold and drizzle — 8°C feels colder than your office aircon',     gear:['Heavy coat','Umbrella','Thermal layer'],  window:'Best window: Saturday 10am–3pm (clear, 12°C)'  },
+      'Seoul':        { country:'South Korea', flag:'🇰🇷', temp:'3°C',  condition:'Snow',          verdict:"Snow possible — bring waterproof boots, you'll feel the cold immediately",  gear:['Winter coat','Gloves','Snow boots'],       window:'Best indoor day: Sunday (heavy snow forecast)'  },
+      'Singapore':    { country:'Singapore',   flag:'🇸🇬', temp:'32°C', condition:'Rainy',         verdict:'Rainy season — afternoon showers daily, mornings usually clear',              gear:['Compact umbrella','Light jacket'],         window:'Best outdoor window: mornings before 12pm'      },
+      'Osaka':        { country:'Japan',       flag:'🇯🇵', temp:'10°C', condition:'Partly cloudy', verdict:'Mild spring weather — layers you can remove as temperature rises midday',    gear:['Light jacket','Umbrella'],                window:'Best window: 10am–3pm (sunny, 14°C)'            },
+      'Kuala Lumpur': { country:'Malaysia',    flag:'🇲🇾', temp:'34°C', condition:'Thunderstorm',  verdict:'Afternoon thunderstorms likely — leave early or wait until evening',          gear:['Umbrella','Quick-dry clothing'],           window:'Best window: mornings before 1pm'                },
+    },
+    searchList: [
+      { name:'Tokyo',        recent:true  },
+      { name:'Seoul',        recent:true  },
+      { name:'Singapore',    recent:false },
+      { name:'Osaka',        recent:false },
+      { name:'Kuala Lumpur', recent:false },
+    ],
+
+    crowdReports: [
+      { sev:'high', loc:'Seksyen 15, Shah Alam', detail:'Knee-deep flooding · road impassable', time:'8 min ago'  },
+      { sev:'med',  loc:'Jalan Plumbum U13',     detail:'Ankle-deep · moving slowly',           time:'14 min ago' },
+      { sev:'low',  loc:'Subang Jaya SS15',      detail:'All clear — road open',                time:'22 min ago' },
+    ],
+
+    /*
+     * activities: the segment card picker.
+     * custom: true marks user-added activities (deletable).
+     * verdict/window: weather context text for each activity.
+     */
+    activities: [
+      { id:'running',  emoji:'🏃', label:'Running',  verdict:'Not suitable tonight — storms 7–9pm',       window:'Best window tomorrow: 6–8am (clear, 25°, low humidity)', custom:false },
+      { id:'commute',  emoji:'🚗', label:'Commute',  verdict:'Expect delays — heavy rain during rush hour', window:'Leave before 6am or after 9pm to avoid worst',            custom:false },
+      { id:'cycling',  emoji:'🚴', label:'Cycling',  verdict:'Dangerous tonight — wet roads, low vis',     window:'Tomorrow morning looks dry and calm from 7am',            custom:false },
+      { id:'hiking',   emoji:'⛰️', label:'Hiking',   verdict:'Postpone — storm cells overhead until 10pm', window:'Saturday morning is the best window this week',           custom:false },
+      { id:'kids',     emoji:'👶', label:'Kids out', verdict:'Stay home — lightning risk until 22:00',      window:'Tomorrow after school looks clear and 30°C',              custom:false },
+      { id:'laundry',  emoji:'👕', label:'Laundry',  verdict:'Don\u2019t hang out \u2014 rain arriving 3\u20135pm', window:'Tomorrow morning: clear, low humidity, good drying',      custom:false },
+    ],
+
+    /* Tracks which activity is currently selected (by id) */
+    activeActivityId: 'running',
+
+    mapTypes: [
+      { id:'map-rain',      name:'Rain Radar',      sub:'Live · Updated 1 min ago',    verdict:'⛈ Storms continuing until 21:15 · Moving SW at 18km/h'      },
+      { id:'map-satellite', name:'Satellite',        sub:'TERRA/AQUA MODIS · 1 hr ago', verdict:'🛰 Cloud cover: 78% · Moderate-thick convective clouds'       },
+      { id:'map-heat',      name:'Heat Index',       sub:'Feels-like temperature map',  verdict:'🌡 Heat index up to 45°C in urban core · Drink water'          },
+      { id:'map-cyclone',   name:'Cyclone Track',    sub:'JMA 72-hour forecast cone',   verdict:'🌀 Typhoon Isa: 820km NE · Not threatening Malaysia this week'  },
+      { id:'map-flood',     name:'Flood Risk Zones', sub:'JPS flood hazard map',        verdict:'🌊 High risk: Seksyen 15, 16 · 2 zones active now'             },
+    ],
+
+    weatherStates: {
+      /*
+       * bg is always a gradient string — never a flat hex.
+       * applyState() sets el.style.background = s.bg so this
+       * preserves the Cloudie gradient effect across all states.
+       */
+      clear:    { bg:'linear-gradient(180deg,#EBF4FF 0%,#F0F7FF 55%,#E8F2FF 100%)', temp:'33°', label:'Sunny',        range:'↑36° ↓26° · Feels like 36°', verdict:'Perfect day outside — clear skies all afternoon',   duration:'No rain expected · UV High from 10am–3pm',     gear:['🕶 Sunglasses','🧴 Sunscreen'],           conf:'#2ECC71', confText:'High confidence · updated 12:00',       icon:'sun',      watch:false, sv:'Great conditions for a run — best before 8am', sw:'Tonight also clear, winds calm, 29°',            humidity:'52%', wind:'12km/h', uv:'High',     aqi:'38 AQI', pressure:'1012mb', vis:'15km' },
+      overcast: { bg:'linear-gradient(180deg,#E8E8EC 0%,#EDEDF2 55%,#E2E4EC 100%)', temp:'31°', label:'Overcast',      range:'↑33° ↓25° · Feels like 33°', verdict:'Gloomy but dry — no rain until tonight',           duration:'Showers possible after 22:00 · Low UV all day', gear:['🧥 Light jacket'],                          conf:'#F39C12', confText:'Moderate confidence · check tonight',    icon:'overcast', watch:false, sv:'OK for running — cooler than usual, overcast',  sw:'Avoid after 10pm (showers)',                     humidity:'70%', wind:'8km/h',  uv:'Low',      aqi:'45 AQI', pressure:'1009mb', vis:'10km' },
+      rain:     { bg:'linear-gradient(180deg,#C3F8FF 0%,#D9F0FF 60%,#E4EDFF 100%)', temp:'30°', label:'Rainy',         range:'↑34° ↓25° · Feels like 35°', verdict:'Bring umbrella — heavy rain arriving 3–5pm',       duration:'Storms clearing by 21:30 · 0.41mm expected',   gear:['☂ Umbrella','🧥 Light jacket'],             conf:'#2ECC71', confText:'High confidence · next update 20:00',   icon:'rain',     watch:false, sv:'Not suitable tonight — storms 7–9pm',           sw:'Best window tomorrow: 6–8am (clear, 25°, low humidity)', humidity:'66%', wind:'9km/h',  uv:'Low',      aqi:'52 AQI', pressure:'1008mb', vis:'10km' },
+      storm:    { bg:'linear-gradient(180deg,#C8D2DC 0%,#D6DDE8 50%,#C4CED8 100%)', temp:'27°', label:'Thunderstorm',  range:'↑32° ↓24° · Feels like 31°', verdict:'Stay indoors — severe thunderstorm overhead now', duration:'Heavy rain until 22:00 · Lightning risk high',  gear:['🚫 Stay inside','🔦 Keep torch ready'],    conf:'#E74C3C', confText:'High confidence · severe cell active', icon:'storm',    watch:false, sv:'Do not go out — lightning risk very high',       sw:'Tomorrow morning looks clear from 7am',          humidity:'88%', wind:'32km/h', uv:'None',     aqi:'58 AQI', pressure:'1001mb', vis:'3km'  },
+      watch:    { bg:'linear-gradient(180deg,#F5F0E0 0%,#FAF4E4 55%,#F0EAD8 100%)', temp:'32°', label:'Partly cloudy', range:'↑35° ↓25° · Feels like 36°', verdict:'Monitor closely — storms possible 3–6pm',         duration:'Watch remains until 18:00 · 50% storm chance', gear:['☂ Umbrella (just in case)'],               conf:'#F39C12', confText:'Moderate confidence · watch conditions', icon:'overcast', watch:true,  sv:'Possible to run before 2pm only',                sw:'Monitor radar before heading out',               humidity:'72%', wind:'14km/h', uv:'Moderate', aqi:'48 AQI', pressure:'1006mb', vis:'8km'  },
+      emergency: { emergency:true },
+    },
+  };
+
+  /* ════════════════════════════════════════════════
+     § 2  TEMPLATES  (pure functions: data → HTML)
+     No DOM access here. Trivial to test in isolation.
+  ════════════════════════════════════════════════ */
+  const T = {
+
+    gearPill:  (label) => `<span class="gear-pill">${label}</span>`,
+    gearPills: (arr)   => arr.map(T.gearPill).join(''),
+
+    hourCard: ({ time, icon, temp, precip, cls, now }) => `
+      <div class="hour-card${now ? ' now' : ''}">
+        <div class="hour-time">${time}</div>
+        <div>${icon}</div>
+        <div class="hour-temp">${temp}</div>
+        <div class="precip-bar-wrap">${
+          precip ? `<div class="precip-bar ${cls}" style="height:${precip}"></div>` : ''
+        }</div>
+      </div>`,
+
+    expHour: ({ time, icon, temp, rain }) => `
+      <div class="exp-hour">
+        <div class="exp-time">${time}</div>
+        <div class="exp-icon">${icon}</div>
+        <div class="exp-temp">${temp}</div>
+        <div class="exp-rain">${rain}</div>
+      </div>`,
+
+    forecastExpand: (day) => {
+      if (!day.hours) {
+        return `<div style="padding:12px 16px;font-size:13px;color:var(--text-sec)">⚠️ ${day.note}</div>`;
+      }
+      return `
+        <div class="sun-strip">
+          <span>🌅 ${day.sunrise}</span>
+          <div class="sun-line"></div>
+          <span>🌇 ${day.sunset}</span>
+        </div>
+        <div class="hourly-expand-scroll">
+          <div class="hourly-expand-track">${day.hours.map(T.expHour).join('')}</div>
+        </div>`;
+    },
+
+    forecastRow: (day, idx) => `
+      <div class="day-row" data-day-row>
+        <div class="day-row-header">
+          <div class="day-name${idx === 0 ? ' today' : ''}">${day.label}</div>
+          <div class="day-weather-icon">${day.icon}</div>
+          <div class="day-condition">${day.condition}</div>
+          <div class="day-precip">💧 ${day.precip}</div>
+          <div class="day-temps"><span class="temp-hi">${day.hi}</span><span class="temp-lo">${day.lo}</span></div>
+        </div>
+        <div class="conf-bar"><div class="conf-bar-fill" style="width:${day.conf}%"></div></div>
+        <div class="hourly-expand">${T.forecastExpand(day)}</div>
+      </div>`,
+
+    /* data-city attribute enables delegation — no onclick */
+    cityRow: (entry) => {
+      const c = DATA.cities[entry.name];
+      return `
+        <div class="search-city" data-city="${entry.name}">
+          <div class="city-flag">${c.flag}</div>
+          <div class="city-info">
+            <div class="city-name">${entry.name}</div>
+            <div class="city-country">${c.country}</div>
+          </div>
+          <div class="city-weather">
+            <div class="city-temp">${c.temp}</div>
+            <div class="city-condition">${c.condition}</div>
+          </div>
+        </div>`;
+    },
+
+    reportCard: ({ sev, loc, detail, time }) => `
+      <div class="report-card">
+        <div class="report-sev sev-${sev}"></div>
+        <div class="report-info">
+          <div class="report-loc">${loc}</div>
+          <div class="report-detail">${detail}</div>
+        </div>
+        <div class="report-time">${time}</div>
+      </div>`,
+  };
+
+  /* ════════════════════════════════════════════════
+     § 3  RENDERERS  (write template output → DOM)
+  ════════════════════════════════════════════════ */
+  function renderHourly() {
+    document.getElementById('hourly-track').innerHTML =
+      DATA.hourly.map(T.hourCard).join('');
+  }
+
+  function renderForecast() {
+    const rows   = DATA.forecast.map(T.forecastRow).join('');
+    const legend = `
+      <div style="background:rgba(255,255,255,0.45);border-radius:var(--r-md);padding:12px 14px;border:var(--border);display:flex;gap:8px;align-items:flex-start;margin-top:4px">
+        <div style="font-size:18px;flex-shrink:0;margin-top:1px">📊</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">Forecast confidence</div>
+          <div style="font-size:12px;color:var(--text-sec);line-height:1.5">Bar width shows how reliable each day's forecast is. Days 5–7 are indicative only — check again closer to the date.</div>
+        </div>
+      </div>`;
+    document.getElementById('forecast-list').innerHTML =
+      `<div style="padding:4px 0 8px"><div class="section-label">9-day forecast</div></div>${rows}${legend}`;
+  }
+
+  function renderSearchCities() {
+    const recent  = DATA.searchList.filter(c =>  c.recent);
+    const popular = DATA.searchList.filter(c => !c.recent);
+    document.getElementById('search-body').innerHTML = `
+      <div class="search-section-label">Recent</div>
+      ${recent.map(T.cityRow).join('')}
+      <div class="search-section-label">Popular</div>
+      ${popular.map(T.cityRow).join('')}`;
+  }
+
+  function renderCrowdReports() {
+    document.getElementById('report-cards').innerHTML =
+      DATA.crowdReports.map(T.reportCard).join('');
+  }
+
+  /* ════════════════════════════════════════════════
+     § 4  LOCATION STORE
+     Single source of truth for the current city.
+     Location.set(name) broadcasts to every [data-location].
+  ════════════════════════════════════════════════ */
+  const Location = {
+    _v: 'Shah Alam',
+    get name() { return this._v; },
+    set(name) {
+      this._v = name;
+      document.querySelectorAll('[data-location]').forEach(el => el.textContent = name);
+    },
+  };
+
+  /* ════════════════════════════════════════════════
+     § 5  CLOCK  (broadcasts to every [data-datetime])
+  ════════════════════════════════════════════════ */
+  const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function startClock() {
+    function tick() {
+      const now  = new Date();
+      let   h    = now.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      const str = `${DAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]} · ${h}:${String(now.getMinutes()).padStart(2,'0')} ${ampm}`;
+      document.querySelectorAll('[data-datetime]').forEach(el => el.textContent = str);
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  /* ════════════════════════════════════════════════
+     § 6  NAVIGATION
+  ════════════════════════════════════════════════ */
+  function switchPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    document.querySelector(`.nav-tab[data-page="${name}"]`).classList.add('active');
+    closeSimDropdown();
+  }
+
+  /* ════════════════════════════════════════════════
+     § 7  OVERLAY HELPERS
+  ════════════════════════════════════════════════ */
+  const ov = {
+    open:  (id) => document.getElementById(id).classList.add('active'),
+    close: (id) => document.getElementById(id).classList.remove('active'),
+  };
+
+  function openSearch() {
+    ov.open('search-overlay');
+    setTimeout(() => document.getElementById('search-input').focus(), 200);
+  }
+  function closeSearch() {
+    ov.close('search-overlay');
+    document.getElementById('search-input').value = '';
+  }
+
+  function selectCity(cityName) {
+    const city = DATA.cities[cityName];
+    if (!city) return;
+    closeSearch();
+
+    /* Single call updates ALL [data-location] elements at once */
+    Location.set(cityName);
+
+    document.getElementById('segment-icon').textContent     = '✈️';
+    document.getElementById('segment-title').textContent    = cityName + ' Travel';
+    document.getElementById('segment-subtitle').textContent = `${city.country} · ${city.flag}`;
+    document.getElementById('segment-verdict').textContent  = city.verdict;
+    document.getElementById('segment-window').textContent   = city.window;
+    document.getElementById('gear-pills').innerHTML         = T.gearPills(city.gear);
+    document.getElementById('verdict-text').textContent     = `${cityName}: ${city.verdict.split('—')[0].trim()}`;
+    document.getElementById('verdict-duration').textContent = `${city.temp} · ${city.condition} · ${city.gear.join(', ')}`;
+    document.getElementById('temp-main').textContent        = city.temp;
+    switchPage('home');
+  }
+
+  function shareAlert() {
+    const msg = encodeURIComponent(
+      `⚠️ Flash Flood Warning · ${Location.name}\n\n` +
+      'Issued by Malaysia Meteorological Department\n' +
+      'Stay indoors. Move to higher ground if in low-lying area.\n' +
+      'Expected to lift by 23:00\n\nEmergency: 999 | Relief centre: Dewan Badminton Shah Alam (2.4km)\n\n[Shared via Cuaca]'
+    );
+    window.open('https://wa.me/?text=' + msg, '_blank');
+  }
+
+  /* ════════════════════════════════════════════════
+     § 8  RADAR  (scrubber, play, lightning, carousel)
+  ════════════════════════════════════════════════ */
+  const TIMESTAMPS   = ['17:42','18:12','18:42','19:12','19:42','20:12','20:42','21:12','21:42'];
+  let   isPlaying    = false;
+  let   playInterval = null;
+  let   lightningOn  = false;
+  let   mapIdx       = 0;
+  let   iconState    = 'rain';   // tracks currently visible weather icon
+
+  function onScrubInput() {
+    const pct    = document.getElementById('scrub').value;
+    const idx    = Math.floor(pct / 100 * (TIMESTAMPS.length - 1));
+    const offset = (pct - 50) * 0.4;
+    document.getElementById('scrub-fill').style.width = pct + '%';
+    document.getElementById('time-label').textContent = TIMESTAMPS[idx] + ' MYT';
+    document.querySelectorAll('.rain-cell').forEach(c => c.style.transform = `translateX(${offset}px)`);
+  }
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const icon  = document.getElementById('play-icon');
+    const scrub = document.getElementById('scrub');
+    if (isPlaying) {
+      icon.innerHTML = '<rect x="6" y="4" width="4" height="16" fill="white"/><rect x="14" y="4" width="4" height="16" fill="white"/>';
+      playInterval = setInterval(() => { scrub.value = (parseInt(scrub.value) + 2) % 101; onScrubInput(); }, 120);
+    } else {
+      icon.innerHTML = '<polygon points="5,3 19,12 5,21" fill="white"/>';
+      clearInterval(playInterval);
+    }
+  }
+
+  function toggleLightning() {
+    lightningOn = !lightningOn;
+    document.getElementById('lightning-layer').style.display  = lightningOn ? 'block' : 'none';
+    document.getElementById('lightning-legend').style.display = lightningOn ? 'flex'  : 'none';
+    /* Toggle .on class — style handled entirely in CSS */
+    document.getElementById('lightning-btn').classList.toggle('on', lightningOn);
+  }
+
+  function cycleMapType(dir = 1) {
+    document.getElementById(DATA.mapTypes[mapIdx].id).classList.remove('visible');
+    mapIdx = (mapIdx + dir + DATA.mapTypes.length) % DATA.mapTypes.length;
+    const t = DATA.mapTypes[mapIdx];
+    document.getElementById(t.id).classList.add('visible');
+    document.getElementById('map-type-name').textContent   = t.name;
+    document.getElementById('map-type-sub').textContent    = t.sub;
+    document.getElementById('radar-verdict-bar').innerHTML = t.verdict;
+  }
+
+  function onIconTap() {
+    const wrap = document.getElementById('weather-icon-wrap');
+    const cls  = iconState === 'sun' ? 'tapped-sun' : iconState === 'storm' ? 'tapped-storm' : 'tapped-rain';
+    wrap.classList.add(cls);
+    setTimeout(() => wrap.classList.remove(cls), 600);
+  }
+
+  /* ════════════════════════════════════════════════
+     § 9  SIMULATE — weather state switcher
+  ════════════════════════════════════════════════ */
+  function toggleSimDropdown()  { document.getElementById('sim-dropdown').classList.toggle('open'); }
+  function closeSimDropdown()   { document.getElementById('sim-dropdown').classList.remove('open'); }
+
+  function applyState(name) {
+    /* Mark active button via data-state — no positional reference needed */
+    document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.sim-btn[data-state="${name}"]`);
+    if (btn) btn.classList.add('active');
+
+    const s = DATA.weatherStates[name];
+    if (!s) return;
+    if (s.emergency) { closeSimDropdown(); ov.open('emergency-overlay'); return; }
+
+    /* Set data-state attribute — CSS attribute selectors handle the gradient.
+       Never touch style.background directly (CSS can't transition gradients). */
+    document.getElementById('app').dataset.state = name;
+
+    /* Icon: hide all, show matching one */
+    ['icon-rain','icon-sun','icon-storm','icon-overcast'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    iconState = s.icon;
+    const ic = document.getElementById('icon-' + s.icon);
+    if (ic) ic.style.display = s.icon === 'sun' ? 'flex' : 'block';
+
+    document.getElementById('temp-main').textContent     = s.temp;
+    document.getElementById('weather-label').textContent = s.label;
+    document.getElementById('temp-range').textContent    = s.range;
+    document.getElementById('verdict-text').textContent  = s.verdict;
+    document.getElementById('verdict-duration').textContent = s.duration;
+    document.getElementById('gear-pills').innerHTML      = T.gearPills(s.gear); /* template */
+    document.getElementById('conf-dot').style.background = s.conf;
+    document.getElementById('conf-text').textContent     = s.confText;
+    document.getElementById('watch-banner').style.display = s.watch ? 'flex' : 'none';
+    document.getElementById('segment-verdict').textContent = s.sv;
+    document.getElementById('segment-window').textContent  = s.sw;
+    document.getElementById('stat-humidity').textContent   = s.humidity;
+    document.getElementById('stat-wind').textContent       = s.wind;
+    document.getElementById('stat-uv').textContent         = s.uv;
+    document.getElementById('stat-aqi').textContent        = s.aqi;
+    document.getElementById('stat-pressure').textContent   = s.pressure;
+    document.getElementById('stat-vis').textContent        = s.vis;
+    closeSimDropdown();
+  }
+
+  /* ════════════════════════════════════════════════
+     § 9b  ACTIVITY SHEET
+     Three-dot menu → bottom sheet → pick or add activity.
+     Writes to DATA.activities (session only).
+  ════════════════════════════════════════════════ */
+
+  /* Emoji cycle for custom activities */
+  const CUSTOM_EMOJIS = ['🎯','🧘','🏊','🎾','🛒','🐕','📦','🌿','🎨','🏋️','🤸','🚶'];
+  let customEmojiIdx  = 0;
+
+  function openActivitySheet() {
+    renderActivitySheet();
+    document.getElementById('activity-backdrop').classList.add('active');
+    document.getElementById('activity-sheet').classList.add('open');
+    document.getElementById('act-custom-input').value = '';
+    /* Reset emoji to first in cycle */
+    document.getElementById('act-custom-emoji').textContent = CUSTOM_EMOJIS[customEmojiIdx];
+  }
+
+  function closeActivitySheet() {
+    document.getElementById('activity-backdrop').classList.remove('active');
+    document.getElementById('activity-sheet').classList.remove('open');
+  }
+
+  function renderActivitySheet() {
+    const container = document.getElementById('act-presets');
+    container.innerHTML = DATA.activities.map(act => `
+      <button class="act-chip${act.custom ? ' custom' : ''}${act.id === DATA.activeActivityId ? ' active' : ''}"
+              data-activity-id="${act.id}">
+        <span class="act-chip-emoji">${act.emoji}</span>
+        ${act.label}
+        ${act.custom ? `<span class="act-chip-del" data-del-id="${act.id}" title="Remove">✕</span>` : ''}
+      </button>`).join('');
+  }
+
+  function selectActivity(id) {
+    const act = DATA.activities.find(a => a.id === id);
+    if (!act) return;
+    DATA.activeActivityId = id;
+
+    /* Update segment card */
+    document.getElementById('segment-icon').textContent    = act.emoji;
+    document.getElementById('segment-title').textContent   = act.label;
+    document.getElementById('segment-subtitle').textContent= 'Your activity';
+    document.getElementById('segment-verdict').textContent = act.verdict;
+    document.getElementById('segment-window').textContent  = act.window;
+
+    closeActivitySheet();
+  }
+
+  function addCustomActivity() {
+    const input = document.getElementById('act-custom-input');
+    const label = input.value.trim();
+    if (!label) return;
+
+    const emoji = CUSTOM_EMOJIS[customEmojiIdx % CUSTOM_EMOJIS.length];
+    customEmojiIdx++;
+
+    const id = 'custom_' + Date.now();
+    DATA.activities.push({
+      id, emoji, label,
+      verdict: `Checking conditions for ${label}…`,
+      window:  `Conditions update when forecast refreshes`,
+      custom: true,
+    });
+
+    /* Auto-select the new activity */
+    selectActivity(id);
+    input.value = '';
+  }
+
+  function deleteActivity(id) {
+    const idx = DATA.activities.findIndex(a => a.id === id);
+    if (idx === -1) return;
+    DATA.activities.splice(idx, 1);
+    /* If deleted the active one, fall back to first */
+    if (DATA.activeActivityId === id) selectActivity(DATA.activities[0].id);
+    else renderActivitySheet();
+  }
+  const EDITABLE_SELECTORS = [
+    '#temp-main','#verdict-text','#verdict-duration',
+    '#segment-verdict','#segment-window',
+    '#stat-humidity','#stat-wind','#stat-uv',
+    '#stat-aqi','#stat-pressure','#stat-vis',
+    '#home-location-name',
+  ];
+  let editMode = false;
+
+  function toggleEditMode() {
+    editMode = !editMode;
+    document.getElementById('edit-banner').classList.toggle('active', editMode);
+    const btn = document.getElementById('edit-btn');
+    btn.classList.toggle('active-state', editMode);
+    btn.textContent = editMode ? '✅ Editing' : '✏️ Edit';
+    EDITABLE_SELECTORS.forEach(sel => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.contentEditable = editMode ? 'true' : 'false';
+      el.style.outline      = editMode ? '2px dashed rgba(75,174,232,0.6)' : '';
+      el.style.borderRadius = editMode ? '4px' : '';
+      el.style.cursor       = editMode ? 'text' : '';
+    });
+    closeSimDropdown();
+  }
+
+  /* ════════════════════════════════════════════════
+     § 11  EVENT BINDING
+     All addEventListener calls live here.
+     Zero onclick attributes exist in the HTML.
+
+     Delegation strategy:
+       • nav tabs     → delegated on #bottom-nav   (data-page)
+       • sim buttons  → delegated on #sim-dropdown  (data-state)
+       • forecast rows→ delegated on #forecast-list (data-day-row)
+       • city rows    → delegated on #search-body   (data-city)
+       • notif toggles→ delegated on #notif-overlay (.n-toggle)
+       • radius opts  → delegated on #notif-overlay (.radius-option)
+  ════════════════════════════════════════════════ */
+  function bindEvents() {
+    const $ = (id) => document.getElementById(id);
+
+    /* Dev toolbar */
+    $('sim-btn').addEventListener('click',  toggleSimDropdown);
+    $('edit-btn').addEventListener('click', toggleEditMode);
+
+    /* Close sim dropdown on outside click */
+    document.addEventListener('click', e => {
+      const dd = $('sim-dropdown'), btn = $('sim-btn');
+      if (dd.classList.contains('open') && !dd.contains(e.target) && !btn.contains(e.target))
+        closeSimDropdown();
+    });
+
+    /* Sim buttons — delegation on dropdown */
+    $('sim-dropdown').addEventListener('click', e => {
+      const b = e.target.closest('[data-state]');
+      if (b) applyState(b.dataset.state);
+    });
+
+    /* Nav tabs — delegation on nav */
+    document.querySelectorAll('.nav-tab').forEach(tab =>
+      tab.addEventListener('click', () => switchPage(tab.dataset.page))
+    );
+
+    /* Home topbar */
+    $('search-btn').addEventListener('click',    openSearch);
+    $('notif-btn').addEventListener('click',     () => ov.open('notif-overlay'));
+    $('emergency-btn').addEventListener('click', () => ov.open('emergency-overlay'));
+
+    /* Forecast topbar search */
+    $('fc-search-btn').addEventListener('click', openSearch);
+
+    /* Verdict card + sheet */
+    $('verdict-card').addEventListener('click', () => {
+      if (editMode) return;
+      ov.open('verdict-detail'); ov.open('verdict-detail-backdrop');
+    });
+    $('verdict-detail-backdrop').addEventListener('click', () => {
+      ov.close('verdict-detail'); ov.close('verdict-detail-backdrop');
+    });
+    $('detail-close-btn').addEventListener('click', () => {
+      ov.close('verdict-detail'); ov.close('verdict-detail-backdrop');
+    });
+
+    /* Emergency */
+    $('em-close-btn').addEventListener('click',    () => ov.close('emergency-overlay'));
+    $('em-close-return').addEventListener('click', () => ov.close('emergency-overlay'));
+    $('em-share-btn').addEventListener('click',    shareAlert);
+
+    /* Search */
+    $('search-cancel-btn').addEventListener('click', closeSearch);
+    /* City rows — delegation on search-body (rows are dynamic) */
+    $('search-body').addEventListener('click', e => {
+      const row = e.target.closest('[data-city]');
+      if (row) selectCity(row.dataset.city);
+    });
+
+    /* Notifications — delegation on overlay covers both n-toggle and radius-option */
+    $('notif-close-btn').addEventListener('click', () => ov.close('notif-overlay'));
+    $('notif-overlay').addEventListener('click', e => {
+      const toggle = e.target.closest('.n-toggle:not(.locked)');
+      if (toggle) toggle.classList.toggle('on');
+      const radius = e.target.closest('.radius-option');
+      if (radius) {
+        document.querySelectorAll('.radius-option').forEach(o => o.classList.remove('selected'));
+        radius.classList.add('selected');
+      }
+    });
+
+    /* Forecast rows — delegation on container (rows are dynamic) */
+    $('forecast-list').addEventListener('click', e => {
+      const row = e.target.closest('[data-day-row]');
+      if (!row) return;
+      const exp    = row.querySelector('.hourly-expand');
+      const wasOpen = exp.classList.contains('open');
+      $('forecast-list').querySelectorAll('.hourly-expand.open').forEach(x => x.classList.remove('open'));
+      if (!wasOpen) exp.classList.add('open');
+    });
+
+    /* Radar */
+    $('lightning-btn').addEventListener('click', toggleLightning);
+    $('map-prev-btn').addEventListener('click',  () => cycleMapType(-1));
+    $('map-next-btn').addEventListener('click',  () => cycleMapType(+1));
+    $('play-btn').addEventListener('click',      togglePlay);
+    $('scrub').addEventListener('input',         onScrubInput);
+    $('weather-icon-wrap').addEventListener('click', onIconTap);
+
+    /* Crowd actions */
+    $('btn-report').addEventListener('click', () => showToast('Report form coming in v2'));
+    $('btn-sos').addEventListener('click',    () => showToast('SOS feature coming in v2'));
+
+    /* Activity sheet — three-dot opens, backdrop closes */
+    $('segment-menu-btn').addEventListener('click', openActivitySheet);
+    $('activity-backdrop').addEventListener('click', closeActivitySheet);
+
+    /* Chip clicks — delegation on preset container */
+    $('act-presets').addEventListener('click', e => {
+      /* Delete button */
+      const delBtn = e.target.closest('[data-del-id]');
+      if (delBtn) { e.stopPropagation(); deleteActivity(delBtn.dataset.delId); return; }
+      /* Select chip */
+      const chip = e.target.closest('[data-activity-id]');
+      if (chip) selectActivity(chip.dataset.activityId);
+    });
+
+    /* Add custom */
+    $('act-add-btn').addEventListener('click', addCustomActivity);
+    $('act-custom-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addCustomActivity();
+    });
+
+    /* Tap emoji to cycle through options */
+    $('act-custom-emoji').addEventListener('click', () => {
+      customEmojiIdx = (customEmojiIdx + 1) % CUSTOM_EMOJIS.length;
+      $('act-custom-emoji').textContent = CUSTOM_EMOJIS[customEmojiIdx];
+    });
+  }
+
+  /* ════════════════════════════════════════════════
+     § 12  HELPERS + INIT
+  ════════════════════════════════════════════════ */
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent   = msg;
+    t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 2200);
+  }
+
+  function init() {
+    renderHourly();          /* § 3 */
+    renderForecast();
+    renderSearchCities();
+    renderCrowdReports();
+    bindEvents();            /* § 11 */
+    startClock();            /* § 5  */
+    /* Skeleton: fade out 1.6 s after load */
+    setTimeout(() => {
+      const sk = document.getElementById('skeleton');
+      sk.classList.add('hidden');
+      setTimeout(() => sk.style.display = 'none', 400);
+    }, 1600);
+  }
+
+  /* Run immediately (script is at bottom of <body>) */
+  init();
+
+})(); /* end IIFE — zero globals exported */
+</script>
+</body>
+</html>
